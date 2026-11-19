@@ -882,9 +882,16 @@
       if (tr.cb) { try { tr.cb(); } catch (e) { if (window.console) console.error(e); } }
     }
 
+    // しわの模様は次の update で作る（起動時のように reset が続けて呼ばれても、作るのは最後の 1 回だけ）
+    var wrkSeed = -1;
     function regenWrinkles() {
-      genWrinkles(WN, 1000 + seedN * 7919, wrkData);
+      wrkSeed = 1000 + seedN * 7919;
       seedN++;
+    }
+    function flushWrinkles() {
+      if (wrkSeed < 0) return;
+      genWrinkles(WN, wrkSeed, wrkData);
+      wrkSeed = -1;
       wrkTex.needsUpdate = true;
     }
 
@@ -1109,6 +1116,7 @@
       U.uBulge.value = clamp(self.pocketBulge, 0, 1);
     }
     self.update = function (dt, t) {
+      flushWrinkles();
       dt = Math.min(dt || 0.016, 0.05);
       // 遷移
       if (trans) {

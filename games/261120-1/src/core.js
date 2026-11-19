@@ -444,6 +444,7 @@
   function showFallback(canvas) {
     try {
       if (canvas) canvas.style.display = 'none';
+      if (G.hideSplash) G.hideSplash(true);
       var fb = document.getElementById('fallback');
       if (fb) {
         fb.style.display = 'block';
@@ -631,8 +632,34 @@
     var shadows = app.shadows = makeShadowCache(scene);
     // 行列の更新は shadows.update で 1 回だけ行う（render 側での 2 回目を省く）
     scene.matrixWorldAutoUpdate = false;
-    // 隠れている物（パパなど）のシェーダも最初に作っておき、登場の瞬間に止まらないようにする
-    try { renderer.compile(scene, camera); } catch (e) { report('compile', e); }
+    // シェーダの用意: 最初の絵は見えている物だけで出す（隠れている物のぶんまで待たない）。
+    // 隠れている物（どんぐり・湯気・パパなど）は最初の絵の後に裏で作り、登場の瞬間に止まらないようにする。
+    // KHR_parallel_shader_compile があればドライバの裏で、無くても描画の合間に少しずつ進む。
+    var warmQ = [], warmBusy = false;
+    function warmNext() {
+      if (warmBusy || !warmQ.length || ctxLost) return;
+      var obj = warmQ.shift();
+      warmBusy = true;
+      var done = function () { warmBusy = false; setTimeout(warmNext, 30); };
+      try {
+        // 拡張が無い時の compileAsync は終わらない（r160）ので、その時は普通に作る
+        var par = false;
+        try { par = !!renderer.getContext().getExtension('KHR_parallel_shader_compile'); } catch (x) { par = false; }
+        var pr0 = (par && renderer.compileAsync) ? renderer.compileAsync(obj, camera, scene) : (renderer.compile(obj, camera, scene), null);
+        if (pr0 && pr0.then) pr0.then(done, function (e) { report('compileAsync', e); done(); }); else done();
+      } catch (e) { report('compile', e); done(); }
+    }
+    app.warm = function (obj) { warmQ.push(obj || scene); if (frames > 1) warmNext(); };
+    var frames = 0;
+    function firstFrames() {
+      if (frames === 2) {
+        // 2 枚目を描いた後: 待ち画面を消し、残りの準備を始める
+        try { if (G.hideSplash) G.hideSplash(); } catch (e) { /* noop */ }
+        warmQ.unshift(scene);
+        setTimeout(warmNext, 60);
+        setTimeout(function () { callFlow('onReady'); }, 120);
+      }
+    }
     // 速度に応じた解像度の調整。
     //  - 48fps を切る状態が続いたら解像度を 1 段下げ、2 秒後に効いたかを確かめる。
     //    効かない（30fps 固定の省電力モードや CPU 側が重い）なら元に戻し、しばらく下げない。
@@ -700,6 +727,7 @@
       callFlow('update', dt, app.time);
       try { shadows.update(); } catch (e) { report('shadows', e); shadows.invalidate(); scene.matrixWorldAutoUpdate = true; scene.traverse(function (o) { if (o.isLight && o.shadow) o.shadow.autoUpdate = true; }); }
       try { renderer.render(scene, camera); } catch (e) { report('render', e); }
+      if (frames < 3) { frames++; firstFrames(); }
       perfStep(raw, dt);
     }
     function start() {

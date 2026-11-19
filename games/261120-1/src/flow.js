@@ -16,15 +16,34 @@
     var steam = G.createSteam(ctx); scene.add(steam.points);
     var iron = G.createIron(ctx); scene.add(iron.group); scene.add(iron.stand); iron.attachSteam(steam);
     var acorn = G.createAcorn(ctx); scene.add(acorn.group);
-    var papa = G.createPapa(ctx); scene.add(papa.group); papa.group.visible = false;
-    // 回避: papa.js が makeFabricMaterial に repeat を配列で渡し、法線マップの repeat が NaN（シャツが真っ黒）になる
-    papa.group.traverse(function (o) {
-      var ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
-      for (var i = 0; i < ms.length; i++) {
-        var nm = ms[i] && ms[i].normalMap;
-        if (nm && !(isFinite(nm.repeat.x) && isFinite(nm.repeat.y))) nm.repeat.set(24, 24);
-      }
-    });
+    // パパは最初の場面に出ないので、起動を軽くするため遊んでいる間に裏で読み込んで作る（G.need('papa')）。
+    // 作るまでは見えない仮のパパ（見えていない時の分岐はすべて papa.group.visible で避けられる）
+    var papa = { group: { visible: false }, setPulse: function () {} }, papaLoaded = false;
+    function attachPapa() {
+      if (papaLoaded || typeof G.createPapa !== 'function') return papaLoaded;
+      var p = G.createPapa(ctx); p.group.visible = false; scene.add(p.group);
+      // 回避: papa.js が makeFabricMaterial に repeat を配列で渡し、法線マップの repeat が NaN（シャツが真っ黒）になる
+      p.group.traverse(function (o) {
+        var ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+        for (var i = 0; i < ms.length; i++) {
+          var nm = ms[i] && ms[i].normalMap;
+          if (nm && !(isFinite(nm.repeat.x) && isFinite(nm.repeat.y))) nm.repeat.set(24, 24);
+        }
+      });
+      papa = p; papaLoaded = true;
+      try { if (G.app && G.app.warm) G.app.warm(p.group); } catch (e) { /* 登場時に作られるだけ */ }
+      return true;
+    }
+    // 読み込みが済んだら、手が空いている時（ドラッグ中でない時）に作る。急ぐ時（パパの場面の直前）は force
+    var papaWant = false;
+    function preparePapa(force) {
+      if (papaLoaded) return true;
+      papaWant = true;
+      if (typeof G.createPapa !== 'function') { if (G.need) G.need('papa'); return false; }
+      if (!force && (held || (G.input && G.input.active))) return false;
+      try { attachPapa(); } catch (e) { if (window.console) console.error('[flow] papa', e); }
+      return papaLoaded;
+    }
     var finger = G.createGhostFinger(ctx); scene.add(finger.group);
     var audio = G.createAudio();
     var NCOL = G.SHIRT_COLORS.length;
@@ -222,7 +241,8 @@
         solvePapa(0, L.wallZ - 0.6);
         camName = 'papa'; G.cam.shot(camPapa, 1.5);
       });
-      after(4.0, function () {
+      after(4.0, function spawn() {
+        if (!preparePapa(true)) { after(0.25, spawn); return; } // まだ届いていなければ少し待つ
         papa.setShirtColor(S.color); papa.pocketBulge = 1; papa.acornPeek = 0;
         var x0 = L.door.x, z0 = L.wallZ - 0.6;
         papa.group.position.set(x0, 0, z0);
@@ -662,7 +682,8 @@
       // ハンガー
       if (S.state === 'hang' && !lock && !held) { hangSwingT -= dt; if (hangSwingT <= 0) { hangSwingT = 3.2; stage.hanger.swing(0.22); } }
 
-      // パパ
+      // パパ（裏で読み込み済みなら、手が空いた時に作っておく。ハンガーの場面に来たら待たずに作る）
+      if (papaWant && !papaLoaded) preparePapa(S.state === 'hang' && !held);
       if (papa.group.visible) {
         papa.update(dt, t);
         if (walking) { stepT -= dt; if (stepT <= 0) { stepT = 0.46; play('step', { vol: 0.8 }); } }
@@ -759,6 +780,8 @@
       onResume: function () { try { audio.resume(); } catch (e) { /* noop */ } },
       onLowPower: function () { /* 部品は ctx.lowPower を作る時に見る。ここでは何もしない */ },
       onFirstTouch: function () { try { audio.unlock(); audio.setAmbient(true); } catch (e) { /* noop */ } },
+      // core: 最初の絵が出た後に呼ばれる。残りの部品（パパ）を裏で読み込み始める
+      onReady: function () { preparePapa(false); },
       onUserGesture: function () { try { if (!audio.ready) audio.unlock(); } catch (e) { /* noop */ } }
     };
     Object.defineProperty(api, 'state', { enumerable: true, get: function () { return S.state; } });

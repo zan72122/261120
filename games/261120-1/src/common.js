@@ -21,6 +21,25 @@
   // シャツの色（1周ごとに変わる）。sRGB hex
   G.SHIRT_COLORS = [0xa9c6e8, 0xf4f2ec, 0xf2c4cf, 0xbfe0c8];
 
+  // ---- 後から読み込む部品（最初の場面に要らない物は、遊んでいる間に裏で読む） ----
+  //   G.LATE = { papa: 'late.js' } は index.html が決める。部品がすでに入っていれば何もしない。
+  var needState = {};
+  G.need = function (name) {
+    var src = G.LATE && G.LATE[name];
+    if (!src || needState[name]) return;
+    needState[name] = 1;
+    var tries = 0;
+    (function load() {
+      var el = document.createElement('script');
+      el.src = src; el.async = true;
+      el.onerror = function () { // 通信が切れた時など: 間をあけて読み直す
+        if (el.parentNode) el.parentNode.removeChild(el);
+        if (++tries < 20) setTimeout(load, Math.min(8000, 1000 * tries));
+      };
+      (document.head || document.body).appendChild(el);
+    })();
+  };
+
   // ---- 数学の小道具 ----
   G.clamp = function (v, a, b) { return v < a ? a : (v > b ? b : v); };
   G.lerp = function (a, b, t) { return a + (b - a) * t; };
@@ -36,11 +55,21 @@
   };
   // 値ノイズ（0..1）と fbm
   function hash2(x, y, s) { var n = Math.sin(x * 127.1 + y * 311.7 + s * 74.7) * 43758.5453; return n - Math.floor(n); }
+  // 格子点の値は seed ごとに最近のマス（8 つまで）を覚えておく。隣の画素はほぼ同じマスを引くので、
+  // テクスチャ作りで重い Math.sin を何度も呼ばずに済む（結果は覚えない時と同じ）
+  var nCache = {};
   G.noise2 = function (x, y, seed) {
     seed = seed || 0;
     var xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
     var u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
-    var a = hash2(xi, yi, seed), b = hash2(xi + 1, yi, seed), c = hash2(xi, yi + 1, seed), d = hash2(xi + 1, yi + 1, seed);
+    var k = nCache[seed];
+    if (!k) { k = nCache[seed] = { xy: new Float64Array(16).fill(NaN), v: new Float64Array(32) }; }
+    var sl = ((xi * 3 + yi * 5) & 7), o = sl * 4, q = sl * 2;
+    if (k.xy[q] !== xi || k.xy[q + 1] !== yi) {
+      k.xy[q] = xi; k.xy[q + 1] = yi;
+      k.v[o] = hash2(xi, yi, seed); k.v[o + 1] = hash2(xi + 1, yi, seed); k.v[o + 2] = hash2(xi, yi + 1, seed); k.v[o + 3] = hash2(xi + 1, yi + 1, seed);
+    }
+    var a = k.v[o], b = k.v[o + 1], c = k.v[o + 2], d = k.v[o + 3];
     return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
   };
   G.fbm2 = function (x, y, oct, seed) {

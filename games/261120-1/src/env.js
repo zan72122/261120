@@ -7,11 +7,18 @@
 
   // ---- 周期つき値ノイズ（タイルの継ぎ目が出ない） ----
   function hsh(x, y, s) { var n = Math.sin(x * 127.1 + y * 311.7 + s * 74.7) * 43758.5453; return n - Math.floor(n); }
+  var pCache = {}; // seed ごとに直前のマスの値を覚える（結果は同じ。Math.sin の呼び出しを減らす）
   function pnoise(x, y, P, s) {
     var xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
     var u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
-    var x0 = ((xi % P) + P) % P, y0 = ((yi % P) + P) % P, x1 = (x0 + 1) % P, y1 = (y0 + 1) % P;
-    var a = hsh(x0, y0, s), b = hsh(x1, y0, s), c = hsh(x0, y1, s), d = hsh(x1, y1, s);
+    var k = pCache[s];
+    if (!k) k = pCache[s] = { x: NaN, y: NaN, p: NaN, a: 0, b: 0, c: 0, d: 0 };
+    if (k.x !== xi || k.y !== yi || k.p !== P) {
+      var x0 = ((xi % P) + P) % P, y0 = ((yi % P) + P) % P, x1 = (x0 + 1) % P, y1 = (y0 + 1) % P;
+      k.x = xi; k.y = yi; k.p = P;
+      k.a = hsh(x0, y0, s); k.b = hsh(x1, y0, s); k.c = hsh(x0, y1, s); k.d = hsh(x1, y1, s);
+    }
+    var a = k.a, b = k.b, c = k.c, d = k.d;
     return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
   }
   function c8(v) { return v < 0 ? 0 : (v > 255 ? 255 : v); }
