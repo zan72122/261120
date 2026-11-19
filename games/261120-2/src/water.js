@@ -357,12 +357,12 @@ export function createTankWater(engine = {}) {
       }
       void main(){
         vec2 p = vW.xz;
-        float a = caust(p * 38.0 + vec2(uTime * 0.05, uTime * 0.02), uTime * 0.35 + 23.0);
-        float b = caust(p.yx * 29.0 + vec2(-uTime * 0.04, 3.0 + uTime * 0.03), uTime * 0.28 + 7.0);
-        float c = clamp(a * 0.6 + b * 0.5, 0.0, 1.5);
+        float a = caust(p * 85.0 + vec2(250.0 + uTime * 0.05, 250.0 + uTime * 0.02), uTime * 0.35 + 23.0);
+        float b = caust(p.yx * 68.0 + vec2(260.0 - uTime * 0.04, 243.0 + uTime * 0.03), uTime * 0.28 + 7.0);
+        float c = pow(clamp(min(a, 1.0) * 0.6 + min(b, 1.0) * 0.4, 0.0, 1.0), 1.6);
         vec2 e = min(vW.xz - vec2(${IN.x0.toFixed(4)}, ${IN.z0.toFixed(4)}), vec2(${IN.x1.toFixed(4)}, ${IN.z1.toFixed(4)}) - vW.xz);
         float edge = smoothstep(0.0, 0.03, min(e.x, e.y));
-        gl_FragColor = vec4(vec3(1.0, 0.97, 0.86) * c * uI * edge * 0.55, 1.0);
+        gl_FragColor = vec4(vec3(1.0, 0.97, 0.86) * c * uI * edge * 0.3, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
@@ -393,23 +393,24 @@ export function createTankWater(engine = {}) {
         const fx = px / AW, fy = py / AH;
         const n = pfbm(fx * 5, fy * 3.2, 1000, 1000, 3, 5);
         const n2 = pfbm(fx * 22, fy * 14, 1000, 1000, 9, 3);
-        const spot = pfbm(fx * 40, fy * 25, 1000, 1000, 13, 2);
+        const spot = pfbm(fx * 95, fy * 60, 1000, 1000, 13, 2);
         // 量: 斑で、水際と底の近くが濃い。水面より上はぎざぎざに薄れる
-        let a = 0.58 + 0.55 * (n - 0.5) * 2 * 0.55 + (n2 - 0.5) * 0.25;
-        a += 0.22 * Math.exp(-((y - (T.waterFull - 0.006)) ** 2) / 0.00006);
-        a += 0.15 * sstep(0.06, IN.yBottom + 0.01, y);
+        let a = 0.6 + (n - 0.5) * 0.7 + (n2 - 0.5) * 0.22;
+        a += 0.2 * Math.exp(-((y - (T.waterFull - 0.006)) ** 2) / 0.00006);
+        a += 0.12 * sstep(0.06, IN.yBottom + 0.01, y);
         const top = T.waterFull + 0.002 + (n2 - 0.5) * 0.008 + (n - 0.5) * 0.006;
         a *= sstep(top + 0.002, top - 0.002, y);
-        a = clamp(a, 0, 1) * 0.88;
+        if (spot > 0.7) a = Math.min(1, a + 0.25 * sstep(0.7, 0.8, spot));
+        a = clamp(a, 0, 1) * 0.84;
         const i = py * AW + px;
         m0[i] = a; mm[i] = a; total0 += a;
         streak[i] = 0.72 + 0.28 * pfbm(fx * 60, fy * 6, 1000, 1000, 21, 2);
-        // 色: 抹茶色の膜に、濃い点（群体）と茶色みのむら
-        let r = 78 + 40 * (n2 - 0.5), g = 108 + 46 * (n2 - 0.5) + 20 * (n - 0.5), b = 40 + 16 * (n - 0.5);
+        // 色: くすんだ緑の膜に、濃い点（群体）と茶色みのむら
+        let r = 74 + 26 * (n2 - 0.5), g = 92 + 30 * (n2 - 0.5) + 14 * (n - 0.5), b = 40 + 10 * (n - 0.5);
         const br = sstep(0.12, 0.04, y) * 0.5 + (n - 0.5) * 0.4;
-        r += 30 * br; g += 6 * br; b -= 6 * br;
-        if (spot > 0.66) { const k = sstep(0.66, 0.78, spot); r *= 1 - 0.35 * k; g *= 1 - 0.28 * k; b *= 1 - 0.3 * k; }
-        if (rnd() < 0.004) { r *= 0.6; g *= 0.65; b *= 0.6; }
+        r += 26 * br; g += 4 * br; b -= 6 * br;
+        if (spot > 0.7) { const k = sstep(0.7, 0.82, spot); r *= 1 - 0.3 * k; g *= 1 - 0.22 * k; b *= 1 - 0.25 * k; }
+        if (rnd() < 0.006) { r *= 0.62; g *= 0.68; b *= 0.6; }
         const j = i * 4;
         cimg.data[j] = clamp(r, 0, 255); cimg.data[j + 1] = clamp(g, 0, 255); cimg.data[j + 2] = clamp(b, 0, 255); cimg.data[j + 3] = 255;
       }
@@ -433,7 +434,7 @@ export function createTankWater(engine = {}) {
   const maskTex = new THREE.CanvasTexture(maskCv); maskTex.colorSpace = THREE.NoColorSpace;
   writeMask();
   const algaeMat = new THREE.MeshStandardMaterial({
-    map: colTex, alphaMap: maskTex, transparent: true, depthWrite: false, roughness: 0.88, metalness: 0, side: THREE.DoubleSide,
+    map: colTex, alphaMap: maskTex, transparent: true, depthWrite: false, roughness: 1, metalness: 0, side: THREE.DoubleSide, envMapIntensity: 0.6,
     color: 0xffffff,
   });
   const algaeMesh = new THREE.Mesh(new THREE.PlaneGeometry(W, AY1 - AY0), algaeMat);
@@ -764,7 +765,8 @@ export function createFX(engine = {}) {
       float st = 0.5 + 0.5 * sin(vAng * 5.0 + sin(vY * 40.0 - uTime * 12.0) * 1.5 + uSeed);
       float flow = 0.5 + 0.5 * sin(vY * 220.0 - uTime * 60.0 + vAng * 2.0);
       vec3 col = uColor * (0.75 + 0.35 * f) + vec3(1.0) * pow(st, 6.0) * 0.5 + vec3(0.15) * flow;
-      float a = uOpacity * (0.35 + 0.65 * pow(f, 1.4)) * (0.85 + 0.15 * flow);
+      float a = uOpacity * (0.4 + 0.6 * pow(f, 1.2)) * (0.85 + 0.15 * flow);
+      col *= 0.8 + 0.2 * (1.0 - f) ;
       gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
       #include <tonemapping_fragment>
       #include <colorspace_fragment>

@@ -111,32 +111,32 @@ function interp(pts, s, k) {
 // ---------- 種類ごとの設定（長さは SL=体長 に対する比） ----------
 const S_END = 1.05;
 const WAKIN_PROF = [
-  [0.00, 0.026, 0.024, 0.024, -0.004],
-  [0.025, 0.058, 0.052, 0.050, -0.004],
-  [0.07, 0.088, 0.080, 0.074, 0.000],
-  [0.15, 0.122, 0.110, 0.095, 0.004],
-  [0.26, 0.152, 0.134, 0.105, 0.006],
-  [0.40, 0.166, 0.146, 0.106, 0.006],
-  [0.55, 0.156, 0.134, 0.096, 0.004],
-  [0.70, 0.122, 0.100, 0.072, 0.002],
-  [0.82, 0.090, 0.076, 0.050, 0.001],
-  [0.92, 0.072, 0.064, 0.036, 0.0],
-  [1.00, 0.064, 0.060, 0.027, 0.0],
+  [0.00, 0.022, 0.020, 0.020, -0.012],
+  [0.03, 0.044, 0.042, 0.038, -0.010],
+  [0.08, 0.072, 0.070, 0.060, -0.004],
+  [0.16, 0.106, 0.102, 0.086, 0.002],
+  [0.27, 0.143, 0.130, 0.100, 0.006],
+  [0.40, 0.165, 0.147, 0.105, 0.008],
+  [0.55, 0.156, 0.136, 0.096, 0.005],
+  [0.70, 0.120, 0.100, 0.071, 0.002],
+  [0.82, 0.088, 0.075, 0.049, 0.001],
+  [0.92, 0.070, 0.063, 0.035, 0.0],
+  [1.00, 0.063, 0.059, 0.027, 0.0],
   [1.05, 0.020, 0.020, 0.010, 0.0],
 ];
 const SARASA_PROF = WAKIN_PROF.map(([s, t, b, w, c]) => [s, t * 1.03, b * 1.03, w * 1.02, c]);
 const RYUKIN_PROF = [
-  [0.00, 0.028, 0.026, 0.028, -0.030],
-  [0.03, 0.066, 0.060, 0.064, -0.030],
-  [0.09, 0.125, 0.105, 0.112, -0.020],
-  [0.17, 0.225, 0.175, 0.170, 0.000],
-  [0.27, 0.330, 0.245, 0.218, 0.012],
-  [0.39, 0.385, 0.290, 0.245, 0.015],
-  [0.51, 0.370, 0.300, 0.240, 0.010],
-  [0.63, 0.305, 0.255, 0.200, 0.004],
-  [0.75, 0.205, 0.170, 0.135, 0.000],
-  [0.87, 0.118, 0.098, 0.074, 0.0],
-  [1.00, 0.078, 0.072, 0.040, 0.0],
+  [0.00, 0.024, 0.022, 0.024, -0.045],
+  [0.03, 0.050, 0.046, 0.050, -0.044],
+  [0.08, 0.090, 0.082, 0.086, -0.036],
+  [0.15, 0.175, 0.140, 0.150, -0.020],
+  [0.25, 0.315, 0.220, 0.208, 0.000],
+  [0.38, 0.400, 0.282, 0.245, 0.012],
+  [0.50, 0.392, 0.300, 0.245, 0.010],
+  [0.62, 0.322, 0.262, 0.205, 0.004],
+  [0.74, 0.215, 0.175, 0.140, 0.000],
+  [0.86, 0.125, 0.100, 0.078, 0.0],
+  [1.00, 0.080, 0.072, 0.040, 0.0],
   [1.05, 0.022, 0.022, 0.012, 0.0],
 ];
 
@@ -178,8 +178,8 @@ const C = (hex) => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
 function bodyColor(kind, s, d, v, n, n2) {
   // d: 1=背 0=腹, n,n2: 0..1 ノイズ
   if (kind === 'wakin') {
-    let c = mix3(C(0xf0b456), C(0xe65a1e), sstep(0.1, 0.5, d));
-    c = mix3(c, C(0xb32a10), sstep(0.62, 1.0, d) * 0.85);
+    let c = mix3(C(0xe8903a), C(0xd23c10), sstep(0.08, 0.42, d));
+    c = mix3(c, C(0x9a1c06), sstep(0.58, 1.0, d) * 0.85);
     // 頭の下（あご）は少し黄色、えらぶた周りは赤
     c = mix3(c, C(0xf2a050), sstep(0.18, 0.0, s) * sstep(0.45, 0.1, d) * 0.6);
     const k = 0.93 + 0.14 * n;
@@ -236,10 +236,10 @@ function bodyTextures(kind, cfg, seed) {
   const rnd = mulberry32(seed * 7 + 3);
   const colsPerSL = cfg.scaleCols, rows = cfg.scaleRows;
   const cw = W / S_END / colsPerSL, ch = H / rows;
-  const c0 = Math.floor(cfg.gillS * colsPerSL), c1 = Math.ceil(1.02 * colsPerSL);
+  const c0 = Math.floor((cfg.gillS - 0.06) * colsPerSL), c1 = Math.ceil(1.02 * colsPerSL);
   for (let c = c0; c <= c1; c++) {
     const s = c / colsPerSL;
-    const fadeIn = sstep(cfg.gillS - 0.01, cfg.gillS + 0.07, s);
+    const fadeIn = 0.25 + 0.75 * sstep(cfg.gillS - 0.02, cfg.gillS + 0.12, s);
     for (let r = 0; r < rows; r++) {
       const cx = c * cw;
       const cyy = (r + (c % 2) * 0.5) * ch;
@@ -254,12 +254,12 @@ function bodyTextures(kind, cfg, seed) {
         ctx.beginPath(); ctx.ellipse(cx, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
         // 縁（暗い線）
         ctx.globalCompositeOperation = 'multiply';
-        ctx.strokeStyle = `rgba(120,40,20,${0.22 * fadeIn})`;
+        ctx.strokeStyle = `rgba(120,40,20,${0.3 * fadeIn})`;
         ctx.lineWidth = 1.1;
         ctx.beginPath(); ctx.ellipse(cx, y, rx, ry, 0, -Math.PI * 0.5, Math.PI * 0.5); ctx.stroke();
         // 縁のすぐ内側の明るい線
         ctx.globalCompositeOperation = 'screen';
-        ctx.strokeStyle = `rgba(255,235,200,${0.14 * fadeIn})`;
+        ctx.strokeStyle = `rgba(255,235,200,${0.2 * fadeIn})`;
         ctx.lineWidth = 1;
         ctx.beginPath(); ctx.ellipse(cx - 1.2, y, rx, ry, 0, -Math.PI * 0.42, Math.PI * 0.42); ctx.stroke();
         // バンプ
@@ -284,19 +284,19 @@ function bodyTextures(kind, cfg, seed) {
       ctx.beginPath();
       bctx.beginPath();
       for (let k = 0; k <= 24; k++) {
-        const vv = vc - 0.2 + (0.4 * k) / 24;
-        const q = (vv - vc) / 0.2;
-        const s = cfg.gillS + 0.04 * Math.cos(q * Math.PI * 0.5) + (pass ? 0.008 : 0);
+        const vv = vc - 0.14 + (0.28 * k) / 24;
+        const q = (vv - vc) / 0.14;
+        const s = cfg.gillS - 0.035 + 0.065 * Math.sqrt(Math.max(0, 1 - q * q)) + (pass ? 0.01 : 0);
         const X = sx(s), Y = vv * H;
         if (k === 0) { ctx.moveTo(X, Y); bctx.moveTo(X, Y); } else { ctx.lineTo(X, Y); bctx.lineTo(X, Y); }
       }
       if (pass === 0) {
         ctx.globalCompositeOperation = 'multiply';
-        ctx.strokeStyle = 'rgba(120,45,25,0.45)'; ctx.lineWidth = 2.2; ctx.stroke();
+        ctx.strokeStyle = 'rgba(130,50,30,0.2)'; ctx.lineWidth = 2.2; ctx.stroke();
         bctx.strokeStyle = 'rgba(55,55,55,0.9)'; bctx.lineWidth = 2.5; bctx.stroke();
       } else {
         ctx.globalCompositeOperation = 'screen';
-        ctx.strokeStyle = 'rgba(255,230,200,0.22)'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,230,200,0.18)'; ctx.lineWidth = 3; ctx.stroke();
       }
     }
     // 側線: 体側中央やや上の小さな点列
@@ -372,11 +372,11 @@ function eyeTexture() {
       const az = (px / W) * Math.PI * 2;
       const n = fbm3(Math.cos(az) * 3, Math.sin(az) * 3, a * 4, 5, 3);
       let c;
-      if (a < 0.46) c = [6, 6, 8];
-      else if (a < 0.52) c = mix3([6, 6, 8], [120, 90, 40], (a - 0.46) / 0.06);
+      if (a < 0.52) c = [6, 6, 8];
+      else if (a < 0.57) c = mix3([6, 6, 8], [120, 90, 40], (a - 0.52) / 0.05);
       else if (a < 0.86) {
-        const t = (a - 0.52) / 0.34;
-        c = mix3([222, 182, 92], [176, 132, 60], t);
+        const t = (a - 0.57) / 0.29;
+        c = mix3([205, 150, 70], [150, 96, 44], t);
         const streak = 0.85 + 0.3 * n;
         c = [c[0] * streak, c[1] * streak, c[2] * streak];
       } else if (a < 0.95) c = mix3([120, 90, 50], [60, 52, 46], (a - 0.86) / 0.09);
@@ -447,7 +447,7 @@ export function createFish(kind = 'wakin') {
   const bodyMat = new THREE.MeshPhysicalMaterial({
     map: tex.map, bumpMap: tex.bump, bumpScale: 0.9,
     roughness: 0.36, metalness: 0.0, clearcoat: 0.35, clearcoatRoughness: 0.25,
-    sheen: 0.25, sheenRoughness: 0.4, sheenColor: new THREE.Color(0xffe6c0),
+    sheen: 0.08, sheenRoughness: 0.5, sheenColor: new THREE.Color(0xffe6c0),
     envMapIntensity: 1.0,
   });
   const finMat = new THREE.MeshPhysicalMaterial({
@@ -455,7 +455,7 @@ export function createFish(kind = 'wakin') {
     roughness: 0.45, metalness: 0, clearcoat: 0.2, clearcoatRoughness: 0.3, alphaTest: 0.01,
   });
   const eyeMat = new THREE.MeshPhysicalMaterial({ map: eyeTexture(), roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.03, envMapIntensity: 1.4 });
-  const mouthMat = new THREE.MeshStandardMaterial({ color: 0x3a1a10, roughness: 0.7 });
+  const mouthMat = new THREE.MeshStandardMaterial({ color: 0x6a2a1c, roughness: 0.6 });
 
   // ---------- 胴（ロフト） ----------
   const NL = 56, NR = 36;
