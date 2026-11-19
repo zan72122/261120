@@ -401,7 +401,7 @@ export function createTankWater(engine = {}) {
         const top = T.waterFull + 0.002 + (n2 - 0.5) * 0.008 + (n - 0.5) * 0.006;
         a *= sstep(top + 0.002, top - 0.002, y);
         if (spot > 0.7) a = Math.min(1, a + 0.25 * sstep(0.7, 0.8, spot));
-        a = clamp(a, 0, 1) * 0.6;
+        a = clamp(a, 0, 1) * 0.68;
         const i = py * AW + px;
         m0[i] = a; mm[i] = a; total0 += a;
         streak[i] = 0.72 + 0.28 * pfbm(fx * 60, fy * 6, 1000, 1000, 21, 2);

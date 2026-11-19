@@ -581,7 +581,7 @@ export function buildWorld(engine) {
   gravelBase.position.set(TK.cx, gBottom + baseH / 2, TK.cz); gravelBase.receiveShadow = true;
   tank.group.add(gravelBase);
   const pebN = LOW ? 700 : 1400;
-  const pebGeo = new THREE.SphereGeometry(1, 10, 7);
+  const pebGeo = new THREE.SphereGeometry(1, 7, 5);
   const pebMat = new THREE.MeshStandardMaterial({ roughness: 0.62, metalness: 0, envMapIntensity: 0.8 });
   const pebbles = new THREE.InstancedMesh(pebGeo, pebMat, pebN);
   const pal = [0xc2ad88, 0xa08462, 0xaea494, 0x86705a, 0xcbbd9f, 0x94704f, 0xbba582, 0x7a7064, 0x6b5a48, 0xa98463];
@@ -606,7 +606,7 @@ export function buildWorld(engine) {
     pi++;
   }
   pebbles.count = pi;
-  pebbles.castShadow = true; pebbles.receiveShadow = true;
+  pebbles.castShadow = false; pebbles.receiveShadow = true;
   tank.group.add(pebbles);
 
   const props = {};
@@ -779,8 +779,10 @@ export function buildWorld(engine) {
     const pts = [
       new THREE.Vector3(ax, L.airStone.y + sh / 2 + 0.008, az),
       new THREE.Vector3(ax, L.airStone.y + 0.03, az),
-      new THREE.Vector3(ax - 0.02, 0.09, az - 0.015),
-      new THREE.Vector3(-0.188, 0.16, -0.12),
+      new THREE.Vector3(ax - 0.015, 0.075, az - 0.022),
+      new THREE.Vector3(ax - 0.06, 0.06, -0.142),
+      new THREE.Vector3(-0.15, 0.07, -0.143),
+      new THREE.Vector3(-0.188, 0.16, -0.125),
       new THREE.Vector3(-0.19, 0.235, -0.12),
       new THREE.Vector3(-0.194, 0.258, -0.118),
       new THREE.Vector3(-0.2, 0.2655, -0.115),

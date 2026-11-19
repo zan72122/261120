@@ -427,6 +427,7 @@ function makeFin(nu, nv, P, mat) {
 }
 
 // ======================================================================
+const FISH_SCALE = 1.3;
 export function createFish(kind = 'wakin') {
   const cfg = KINDS[kind] || KINDS.wakin;
   kind = KINDS[kind] ? kind : 'wakin';
@@ -640,8 +641,9 @@ export function createFish(kind = 'wakin') {
   const worldP = new THREE.Vector3();
   const invM = new THREE.Matrix4();
 
+  group.scale.setScalar(FISH_SCALE); // 画面で見やすいよう少し大きめの金魚（8〜9cm）
   const fish = {
-    group, inner, kind, length: cfg.total, radius: cfg.radius, mouth,
+    group, inner, kind, length: cfg.total * FISH_SCALE, radius: cfg.radius * FISH_SCALE, mouth,
     swim: 0.3, turn: 0,
     finOrder: null, // number なら ひれの renderOrder をこれに固定（水槽の水の外: あみで運ぶ間・鉢の中は 40 など）。null で murkOrderForZ
     update(dt, t) {
