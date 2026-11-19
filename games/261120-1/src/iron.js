@@ -167,12 +167,12 @@
     var W = 256, H = 512, c = G.makeCanvas(W, H), g = c.getContext('2d');
     function px(x) { return (x / 0.16 + 0.5) * W; }
     function pz(z) { return (z / 0.32 + 0.5) * H; }
-    g.fillStyle = '#c4c8cb'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#c9cdd1'; g.fillRect(0, 0, W, H);
     var rnd = G.rng(77), i;
     // 細いヘアライン
-    for (i = 0; i < 900; i++) {
+    for (i = 0; i < 500; i++) {
       var y = rnd() * H, l = 20 + rnd() * 120, x0 = rnd() * W;
-      g.strokeStyle = rnd() < 0.5 ? 'rgba(255,255,255,0.10)' : 'rgba(70,75,80,0.08)';
+      g.strokeStyle = rnd() < 0.5 ? 'rgba(255,255,255,0.08)' : 'rgba(90,95,100,0.05)';
       g.lineWidth = 1; g.beginPath(); g.moveTo(x0, y); g.lineTo(x0 + l, y + (rnd() - 0.5) * 2); g.stroke();
     }
     // 縁に沿ったゆるい面取りの帯
@@ -227,10 +227,10 @@
         var nx = (x - 63.5) / 64, ny = (y - 63.5) / 64;
         var r = Math.sqrt(nx * nx + ny * ny);
         var n1 = G.fbm2(nx * 1.8 + cell * 5.3, ny * 1.8 + cell * 2.1, 4, cell * 7 + 1);
-        var rr = r * (0.78 + 0.5 * (n1 - 0.5) * 2 * 0.5 + 0.12);
-        var base = Math.pow(G.clamp(1 - rr, 0, 1), 1.6);
+        var rr = r * (0.9 + 0.9 * (n1 - 0.5));
+        var base = Math.pow(G.clamp(1 - rr, 0, 1), 0.9);
         var n2 = G.fbm2(nx * 4.2 + cell * 3.7, ny * 4.2 - cell, 4, cell * 13 + 5);
-        var a = base * (0.45 + 0.85 * n2) * G.smooth(1.0, 0.82, r);
+        var a = base * (0.55 + 0.9 * n2) * G.smooth(1.0, 0.8, r);
         var o = ((cy * 128 + y) * S + cx * 128 + x) * 4;
         d[o] = d[o + 1] = d[o + 2] = 255; d[o + 3] = Math.round(G.clamp(a, 0, 1) * 255);
       }
@@ -327,7 +327,7 @@
         var ca = Math.cos(a), sa2 = Math.sin(a);
         spawn(x + ca * rad, y + rnd() * 0.02, z + sa2 * rad,
           ca * sp, 0.08 + rnd() * 0.25, sa2 * sp,
-          0.04 + rnd() * 0.03, (0.14 + rnd() * 0.16) * (0.6 + 0.4 * s), 1.2 + rnd() * 1.1, 0.22 + 0.16 * s);
+          0.05 + rnd() * 0.04, (0.18 + rnd() * 0.18) * (0.6 + 0.4 * s), 1.3 + rnd() * 1.1, 0.34 + 0.2 * s);
       }
     };
     api.update = function (dt) {
@@ -377,12 +377,12 @@
     // ---- 素材
     var matWhite = new THREE.MeshPhysicalMaterial({ color: 0xf6f6f3, roughness: 0.3, metalness: 0,
       clearcoat: 0.7, clearcoatRoughness: 0.14, side: THREE.DoubleSide });
-    var matTank = new THREE.MeshPhysicalMaterial({ color: 0x58c3c6, roughness: 0.1, metalness: 0,
-      clearcoat: 1, clearcoatRoughness: 0.05, transparent: true, opacity: 0.62, side: THREE.DoubleSide, depthWrite: false });
+    var matTank = new THREE.MeshPhysicalMaterial({ color: 0x3db7c0, roughness: 0.1, metalness: 0,
+      clearcoat: 1, clearcoatRoughness: 0.05, transparent: true, opacity: 0.72, side: THREE.DoubleSide, depthWrite: false });
     var matWater = new THREE.MeshStandardMaterial({ color: 0x2f9fae, roughness: 0.15, transparent: true, opacity: 0.55, depthWrite: false });
     var matGrip = new THREE.MeshStandardMaterial({ color: 0x80878d, roughness: 0.78, metalness: 0 });
-    var matMetal = new THREE.MeshStandardMaterial({ color: 0xd8dbde, roughness: 0.26, metalness: 1 });
-    var matSole = new THREE.MeshStandardMaterial({ color: 0xffffff, map: soleTexture(outline, aniso), roughness: 0.3, metalness: 1 });
+    var matMetal = new THREE.MeshStandardMaterial({ color: 0xd8dbde, roughness: 0.26, metalness: 0.8 });
+    var matSole = new THREE.MeshStandardMaterial({ color: 0xffffff, map: soleTexture(outline, aniso), roughness: 0.32, metalness: 0.55 });
     var matDark = new THREE.MeshStandardMaterial({ color: 0x8e959b, roughness: 0.45 });
     var matAccent = new THREE.MeshPhysicalMaterial({ color: 0x3aa5b1, roughness: 0.3, clearcoat: 0.6 });
     var matLamp = new THREE.MeshStandardMaterial({ color: 0x302820, emissive: 0xffa040, emissiveIntensity: 1.2, roughness: 0.3 });
@@ -413,16 +413,20 @@
 
     // ---- 本体の殻（白 + 前の水色タンク）
     var bodyProf = splineProfile([[0.972, 0.0095], [0.988, 0.014], [0.99, 0.020], [0.982, 0.028], [0.962, 0.037],
-      [0.925, 0.046], [0.87, 0.054], [0.79, 0.061], [0.69, 0.066], [0.57, 0.070], [0.43, 0.0728], [0.28, 0.0742]], 24);
+      [0.925, 0.046], [0.87, 0.054], [0.79, 0.061], [0.69, 0.066], [0.57, 0.070], [0.43, 0.0728], [0.28, 0.0742], [0.14, 0.0748]], 26);
     function bodyXZ(a, j, o, s) {
       var sz = 1 - (1 - s) * 0.8, zc = 0.014 * (1 - s);
       a[j * 3] = o.x * s; a[j * 3 + 2] = o.z * sz + zc;
     }
-    var bodyRings = makeRings(outline, bodyProf, function (a, j, o, p) { bodyXZ(a, j, o, p[0]); a[j * 3 + 1] = p[1]; });
-    var TANK_Z = -0.03;
+    // 先端ほど低く（鼻先がすっと下がる）
+    function noseH(z) { return 0.6 + 0.4 * G.smooth(-0.15, 0.06, z); }
+    var bodyRings = makeRings(outline, bodyProf, function (a, j, o, p) {
+      bodyXZ(a, j, o, p[0]); a[j * 3 + 1] = 0.0095 + (p[1] - 0.0095) * noseH(o.z);
+    });
+    var TANK_Z = -0.02;
     var bodyGeo = loftGeometry(bodyRings, M, {
       capTop: 0, capLift: 0.0012,
-      group: function (r, j) { return (r >= 2 && r <= 15 && outline[j].z < TANK_Z) ? 1 : 0; }
+      group: function (r, j) { return (r >= 1 && outline[j].z < TANK_Z) ? 1 : 0; }
     });
     var bodyMesh = new THREE.Mesh(bodyGeo, [matWhite, matTank]);
     bodyMesh.renderOrder = 2;
@@ -431,10 +435,25 @@
     (function () {
       var prof = [];
       for (var r = 0; r < bodyProf.length; r++) if (bodyProf[r][1] <= 0.047) prof.push(bodyProf[r]);
-      var rings = makeRings(outline, prof, function (a, j, o, p) {
-        bodyXZ(a, j, o, p[0] * 0.93);
-        a[j * 3 + 2] = Math.min(a[j * 3 + 2], TANK_Z + 0.008);
-        a[j * 3 + 1] = Math.max(p[1], 0.0125);
+      // 本体の輪 r の、ある z での半幅
+      function halfW(ring, z) {
+        var best = 0;
+        for (var j = 0; j < M; j++) {
+          var jn = (j + 1) % M, x0 = ring[j * 3], z0 = ring[j * 3 + 2], x1 = ring[jn * 3], z1 = ring[jn * 3 + 2];
+          if ((z0 - z) * (z1 - z) <= 0 && z0 !== z1) {
+            var xx = Math.abs(x0 + (x1 - x0) * (z - z0) / (z1 - z0));
+            if (xx > best) best = xx;
+          }
+        }
+        return best;
+      }
+      var rings = makeRings(outline, prof, function (a, j, o, p, r) {
+        bodyXZ(a, j, o, p[0]);
+        var z = Math.min(a[j * 3 + 2], TANK_Z + 0.002);
+        var lim = halfW(bodyRings[Math.min(r + 1, bodyRings.length - 1)], z) * 0.9;
+        a[j * 3] = G.clamp(a[j * 3] * 0.92, -lim, lim);
+        a[j * 3 + 2] = Math.max(z, -0.135);
+        a[j * 3 + 1] = Math.max(0.0095 + (p[1] - 0.0095) * noseH(z) * 0.85, 0.0125);
       });
       var w = new THREE.Mesh(loftGeometry(rings, M, { capTop: 0 }), matWater);
       w.renderOrder = 1;
@@ -508,8 +527,8 @@
     // ================================================================ 充電台
     var stand = new THREE.Group(); stand.name = 'ironStand';
     stand.position.set(G.L.stand.x, 0, G.L.stand.z);
-    var matStand = new THREE.MeshPhysicalMaterial({ color: 0xeeefee, roughness: 0.38, clearcoat: 0.4, clearcoatRoughness: 0.3 });
-    var matCradle = new THREE.MeshPhysicalMaterial({ color: 0xd3d7da, roughness: 0.5, clearcoat: 0.2, emissive: 0xfff2d6, emissiveIntensity: 0 });
+    var matStand = new THREE.MeshPhysicalMaterial({ color: 0xd9dbdb, roughness: 0.38, clearcoat: 0.4, clearcoatRoughness: 0.3 });
+    var matCradle = new THREE.MeshPhysicalMaterial({ color: 0x9ea4a9, roughness: 0.5, clearcoat: 0.2, emissive: 0xfff2d6, emissiveIntensity: 0 });
     var matStandLamp = new THREE.MeshStandardMaterial({ color: 0x202020, emissive: 0x7dff9a, emissiveIntensity: 1.4, roughness: 0.25 });
     var BASE_TOP = 0.020, HEEL_Y = 0.022, HEEL_Z = 0.115;
     var tanT = Math.tan(TILT);
@@ -745,7 +764,7 @@
       // ---- 湯気
       if (steam) {
         if (iron.mode === 'held' && iron.steamLevel > 0) {
-          var rate = G.clamp(iron.steamLevel, 0, 1) * (ctx.lowPower ? 48 : 90);
+          var rate = G.clamp(iron.steamLevel, 0, 1) * (ctx.lowPower ? 70 : 140);
           emitAcc += rate * dt;
           while (emitAcc >= 1) {
             emitAcc -= 1;
@@ -753,7 +772,7 @@
             while (k < EMIT.length - 1 && pick > EMIT[k].w) { pick -= EMIT[k].w; k++; }
             var em = EMIT[k];
             puffLocal(em.x + (rnd() - 0.5) * 0.02, 0.003, em.z + (rnd() - 0.5) * 0.03, em.dx, 0, em.dz,
-              0.08 + rnd() * 0.16, 0.03 + rnd() * 0.05, 0.018 + rnd() * 0.01, 0.08 + rnd() * 0.08, 0.9 + rnd() * 0.8, 0.26);
+              0.10 + rnd() * 0.18, 0.03 + rnd() * 0.05, 0.022 + rnd() * 0.012, 0.08 + rnd() * 0.09, 0.9 + rnd() * 0.8, 0.34);
           }
         } else emitAcc = 0;
         // 台・かかと立ちのときの細い湯気
@@ -764,9 +783,9 @@
             var cnt = 1 + Math.floor(rnd() * 2);
             for (var w = 0; w < cnt; w++) {
               if (iron.mode === 'docked') {
-                puffLocal((rnd() - 0.5) * 0.05, 0.0, -0.11 + rnd() * 0.04, 0, -1, 0, 0.02, 0.06, 0.01, 0.035 + rnd() * 0.02, 1.3 + rnd() * 0.6, 0.16);
+                puffLocal((rnd() - 0.5) * 0.05, 0.0, -0.11 + rnd() * 0.04, 0, -1, 0, 0.02, 0.06, 0.01, 0.05 + rnd() * 0.03, 1.4 + rnd() * 0.6, 0.24);
               } else {
-                puffLocal((rnd() - 0.5) * 0.06, -0.003, -0.06 + rnd() * 0.1, 0, -1, 0, 0.03, 0.05, 0.01, 0.035 + rnd() * 0.02, 1.3 + rnd() * 0.6, 0.16);
+                puffLocal((rnd() - 0.5) * 0.06, -0.003, -0.06 + rnd() * 0.1, 0, -1, 0, 0.03, 0.05, 0.01, 0.05 + rnd() * 0.03, 1.4 + rnd() * 0.6, 0.24);
               }
             }
           }
