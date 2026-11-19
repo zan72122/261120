@@ -55,6 +55,9 @@
 //   devicePixelRatio 上限 2（画面の短辺 >= 700 CSS px の大画面は 1.5）× scale(0.6〜1.0, 動的解像度)。
 //   それでも重いと low=true（renderer.shadowMap 無効、シーン内ライトの castShadow=false、particleBudget 半分）にして
 //   onChange を呼ぶ。low から戻しはしない。particleBudget は通常 800、low で 400（粒子の目安上限数）。
+//   目標はなめらかな 60fps。解像度を下げても速くならない（30fps 上限の省電力モード等）ときはそれ以上下げない。
+//   影の地図は 60fps 付近では 2 フレームに 1 回だけ描き直す（renderer.shadowMap.autoUpdate=false で engine が管理）。
+//   最初の数フレームで、見えていない物も含めてシェーダを先に用意しておく（遊んでいる途中の初回表示でつかえない）。
 //   world 担当: low 後に足すライトは castShadow を付けないこと（engine.quality.low を見る）。
 //
 // 保存（localStorage キー 'gf-261120-2'。例外・拒否・壊れた JSON でも落ちない）
@@ -89,6 +92,8 @@ export function createEngine({ canvas, fallbackEl }) {
   renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = false; // 更新は frame() で間引いて行う
+  renderer.shadowMap.needsUpdate = true;
   renderer.setClearColor(0x2b2420, 1);
 
   const scene = new THREE.Scene();
@@ -414,7 +419,9 @@ export function createEngine({ canvas, fallbackEl }) {
   };
 
   // ---------- quality control ----------
+  // 目標 60fps。1 段下げても速くならなければ（30Hz 上限・CPU 律速）解像度はそれ以上下げない。
   let ftAvg = 1 / 60, qWarm = 0, slowFor = 0, fastFor = 0, cooldown = 0;
+  let stepFt = 0, noGain = false; // 直前に解像度を下げた時の ftAvg / 下げても効かなかった
   function goLow() {
     if (quality.low) return;
     quality.low = true;
@@ -427,36 +434,56 @@ export function createEngine({ canvas, fallbackEl }) {
     });
     for (const fn of qualityFns) safeCall(fn, quality);
   }
+  function setScale(v) {
+    quality.scale = v;
+    applyPixelRatio();
+    for (const fn of qualityFns) safeCall(fn, quality);
+  }
   function updateQuality(rawDt) {
     if (rawDt <= 0 || rawDt > 0.25) return; // 一時的なつかえは無視
     qWarm += rawDt;
     ftAvg += (rawDt - ftAvg) * 0.05;
     if (qWarm < 2) return; // 開始・復帰直後は様子見
     cooldown -= rawDt;
-    const SLOW = 1 / 26, FAST = 1 / 48; // 目標 30fps。60Hz で余裕があれば上げる
+    const SLOW = 1 / 48, FAST = 1 / 57, VERY_SLOW = 1 / 26;
     if (ftAvg > SLOW) { slowFor += rawDt; fastFor = 0; }
     else if (ftAvg < FAST) { fastFor += rawDt; slowFor = 0; }
     else { slowFor = 0; fastFor = 0; }
     if (cooldown > 0) return;
+    // 直前の段下げの効き目を確認（5% 以上速くならなければ解像度はやめる）
+    if (stepFt > 0) {
+      if (ftAvg > stepFt * 0.95 && ftAvg > SLOW) {
+        noGain = true;
+        if (quality.scale < 1.0 - 1e-3) setScale(Math.min(1.0, quality.scale + 0.1)); // 効かない分は戻す
+      }
+      stepFt = 0;
+    }
     if (slowFor > 1.0) {
-      if (quality.scale > 0.6 + 1e-3) {
-        quality.scale = Math.max(0.6, quality.scale - 0.1);
-        applyPixelRatio();
-        for (const fn of qualityFns) safeCall(fn, quality);
-      } else if (!quality.low) {
+      if (!noGain && quality.scale > 0.6 + 1e-3) {
+        stepFt = ftAvg;
+        setScale(Math.max(0.6, quality.scale - 0.1));
+      } else if (!quality.low && ftAvg > VERY_SLOW) {
         goLow();
       }
-      slowFor = 0; cooldown = 2.0;
+      slowFor = 0; cooldown = 1.5;
     } else if (fastFor > 4.0 && quality.scale < 1.0 - 1e-3) {
-      quality.scale = Math.min(1.0, quality.scale + 0.05);
-      applyPixelRatio();
-      for (const fn of qualityFns) safeCall(fn, quality);
+      setScale(Math.min(1.0, quality.scale + 0.05));
       fastFor = 0; cooldown = 3.0;
     }
   }
 
+  // ---------- shader warm-up ----------
+  // 見えていない物（後で出てくる道具・粒子・お手本の手）も一度 visible にして compile し、途中の初回表示のつかえをなくす。
+  function warmUp() {
+    const hidden = [];
+    scene.traverse((o) => { if (!o.visible) { hidden.push(o); o.visible = true; } });
+    try { renderer.compile(scene, camera); } catch (e) { /* ignore */ }
+    for (const o of hidden) o.visible = false;
+  }
+
   // ---------- loop / pause ----------
   let running = false, paused = false, rafId = 0, lastTs = null, contextLost = false, loopErrLogged = false;
+  let frameNo = 0, warmed = false, shadowSkip = 0;
   function frame(ts) {
     rafId = requestAnimationFrame(frame);
     if (paused) return;
@@ -471,7 +498,16 @@ export function createEngine({ canvas, fallbackEl }) {
       updateCamera(dt, elapsed);
       for (const fn of updateFns) safeCall(fn, dt, elapsed);
       engine.ghost._update(dt);
-      if (!contextLost) renderer.render(scene, camera);
+      if (!contextLost) {
+        frameNo++;
+        if (!warmed && frameNo >= 2) { warmed = true; warmUp(); }
+        // 影: 速い画面（ほぼ 60fps 以上）では 2 フレームに 1 回。遅い時は毎フレーム（動きが粗く見えないように）
+        if (renderer.shadowMap.enabled) {
+          if (shadowSkip > 0 && raw < 1 / 45) shadowSkip--;
+          else { renderer.shadowMap.needsUpdate = true; shadowSkip = 1; }
+        }
+        renderer.render(scene, camera);
+      }
     } catch (e) {
       if (!loopErrLogged) { loopErrLogged = true; console.error('[engine] frame error', e); }
     }
@@ -516,6 +552,7 @@ export function createEngine({ canvas, fallbackEl }) {
   }, false);
   canvas.addEventListener('webglcontextrestored', () => {
     contextLost = false;
+    renderer.shadowMap.needsUpdate = true;
     applyPixelRatio();
   }, false);
 
@@ -632,6 +669,7 @@ function createGhost(scene, camera, size) {
 
   const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
+  ensure(); // 最初から作っておく（シェーダの準備を開始時に済ませる）
   const ghost = {
     get active() { return state.playing && !state.stopping; },
     play(points, { duration = 1.8, loop = true, tap = false, pause = 0.6 } = {}) {

@@ -393,6 +393,28 @@ function eyeTexture() {
   return EYE_TEX;
 }
 
+// 添字付きジオメトリの頂点法線（three の computeVertexNormals と同じ計算を Vector3 なしで行う。毎フレーム用）
+function fastVertexNormals(geo) {
+  const P = geo.attributes.position.array, N = geo.attributes.normal.array, I = geo.index.array;
+  N.fill(0);
+  for (let f = 0, n = I.length; f < n; f += 3) {
+    const a = I[f] * 3, b = I[f + 1] * 3, c = I[f + 2] * 3;
+    const bx = P[b], by = P[b + 1], bz = P[b + 2];
+    const cbx = P[c] - bx, cby = P[c + 1] - by, cbz = P[c + 2] - bz;
+    const abx = P[a] - bx, aby = P[a + 1] - by, abz = P[a + 2] - bz;
+    const nx = cby * abz - cbz * aby, ny = cbz * abx - cbx * abz, nz = cbx * aby - cby * abx;
+    N[a] += nx; N[a + 1] += ny; N[a + 2] += nz;
+    N[b] += nx; N[b + 1] += ny; N[b + 2] += nz;
+    N[c] += nx; N[c + 1] += ny; N[c + 2] += nz;
+  }
+  for (let i = 0, n = N.length; i < n; i += 3) {
+    const x = N[i], y = N[i + 1], z = N[i + 2];
+    const l = Math.sqrt(x * x + y * y + z * z);
+    if (l > 0) { const k = 1 / l; N[i] = x * k; N[i + 1] = y * k; N[i + 2] = z * k; }
+  }
+  geo.attributes.normal.needsUpdate = true;
+}
+
 // ---------- 汎用ひれ（u: 鰭条方向 0→1, v: 鰭条の並び 0→1） ----------
 function makeFin(nu, nv, P, mat) {
   const count = (nu + 1) * (nv + 1);
@@ -627,18 +649,37 @@ export function createFish(kind = 'wakin') {
     else { A = amp * 0.1 * Math.max(0, 1 + u * 3); tb = u * u * 0.6; }
     return A * Math.sin(st.phase - u * waveK) - turnK * tb * span;
   }
-  const EPS = 0.0015;
-  function bendAt(x, out) {
-    const d = bendD(x);
-    const dd = (bendD(x + EPS) - bendD(x - EPS)) / (2 * EPS);
-    const th = Math.atan(dd);
-    out.d = d; out.s = Math.sin(th); out.c = Math.cos(th); out.th = th;
+  // 曲がり量 d と傾き dd/dx を解析的に一度に求める（数値微分で bendD を 3 回呼んでいたのを 1 回分の計算に）。
+  // s, c は傾き角 th の sin/cos（atan を使わず dd から直接）。th が要る時だけ withTh=true。
+  function bendAt(x, out, withTh) {
+    const u = (x0 - x) / span;
+    let A, dA, tb, dtb;
+    if (u >= 0) {
+      const uc = u < 1.3 ? u : 1.3;
+      const p07 = Math.pow(uc, 0.7);
+      A = amp * (0.1 + 0.9 * uc * p07);
+      dA = u < 1.3 ? amp * 1.53 * p07 : 0;
+      tb = u * u; dtb = 2 * u;
+    } else {
+      const g = 1 + u * 3;
+      A = g > 0 ? amp * 0.1 * g : 0;
+      dA = g > 0 ? amp * 0.3 : 0;
+      tb = u * u * 0.6; dtb = 1.2 * u;
+    }
+    const ph = st.phase - u * waveK;
+    const sn = Math.sin(ph), cs = Math.cos(ph);
+    out.d = A * sn - turnK * tb * span;
+    const dd = -(dA * sn - A * waveK * cs - turnK * dtb * span) / span;
+    const ic = 1 / Math.sqrt(1 + dd * dd);
+    out.s = dd * ic; out.c = ic;
+    if (withTh) out.th = Math.atan(dd);
     return out;
   }
   const bt = { d: 0, s: 0, c: 1, th: 0 };
   const tmpV = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), tmpQ2 = new THREE.Quaternion(), qa = new THREE.Quaternion(), qb = new THREE.Quaternion(), qc = new THREE.Quaternion();
   const AX = new THREE.Vector3(1, 0, 0), AY = new THREE.Vector3(0, 1, 0), AZ = new THREE.Vector3(0, 0, 1), ONE = new THREE.Vector3(1, 1, 1);
   const worldP = new THREE.Vector3();
+  const eyeDv = new THREE.Vector3(), eyeW = new THREE.Vector3();
   const invM = new THREE.Matrix4();
 
   group.scale.setScalar(FISH_SCALE); // 画面で見やすいよう少し大きめの金魚（8〜9cm）
@@ -695,7 +736,7 @@ export function createFish(kind = 'wakin') {
       bodyGeo.attributes.normal.needsUpdate = true;
 
       // 口
-      bendAt(xOf(0), bt);
+      bendAt(xOf(0), bt, true);
       const mx = xOf(0) + open * 0.02 * SL - 0.00015;
       mouthDisc.position.set(mx - 0 * bt.s, cen(0), bt.d);
       mouthDisc.rotation.set(0, -bt.th, 0);
@@ -739,7 +780,7 @@ export function createFish(kind = 'wakin') {
           A[k * 3 + 2] = bt.d + z * bt.c;
         }
         f.mesh.geometry.attributes.position.needsUpdate = true;
-        f.mesh.geometry.computeVertexNormals();
+        fastVertexNormals(f.mesh.geometry);
       }
 
       // 目
@@ -747,15 +788,15 @@ export function createFish(kind = 'wakin') {
       let tl = null;
       if (lookTarget) { invM.copy(inner.matrixWorld).invert(); tl = tmpV.copy(lookTarget).applyMatrix4(invM); }
       for (const e of eyes) {
-        bendAt(e.base.x, bt);
+        bendAt(e.base.x, bt, true);
         e.mesh.position.set(e.base.x - e.base.z * bt.s, e.base.y, bt.d + e.base.z * bt.c);
         let want = e.rest;
         if (tl) {
-          const dv = new THREE.Vector3().subVectors(tl, e.mesh.position).normalize();
+          const dv = eyeDv.subVectors(tl, e.mesh.position).normalize();
           if (dv.dot(e.rest) > -0.2) {
-            want = e.rest.clone().lerp(dv, 0.35).normalize();
+            want = eyeW.copy(e.rest).lerp(dv, 0.35).normalize();
             const ang = want.angleTo(e.rest);
-            if (ang > 0.35) want = e.rest.clone().lerp(want, 0.35 / ang).normalize();
+            if (ang > 0.35) want = eyeW.lerpVectors(e.rest, want, 0.35 / ang).normalize();
           }
         }
         e.dir.lerp(want, 1 - Math.exp(-dt * 8)).normalize();

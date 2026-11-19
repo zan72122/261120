@@ -194,11 +194,16 @@ function makePool(max, style, blending) {
   const pts = new THREE.Points(geo, mat);
   pts.frustumCulled = false;
   const list = [];
+  const attrs = ['position', 'aSize', 'aAlpha', 'aColor'].map((k) => geo.attributes[k]);
+  let lastN = 0;
   return {
     pts, list, max, mat,
     add(o) { if (list.length >= max) return null; list.push(o); return o; },
     flush() {
       const n = list.length;
+      pts.visible = n > 0; // 空の時は描画呼び出しごと省く
+      if (n === 0 && lastN === 0) return; // 何も無い間は GPU へ送らない
+      lastN = n;
       for (let i = 0; i < n; i++) {
         const o = list[i];
         P[i * 3] = o.p.x; P[i * 3 + 1] = o.p.y; P[i * 3 + 2] = o.p.z;
@@ -206,7 +211,9 @@ function makePool(max, style, blending) {
         Cc[i * 3] = o.c.r; Cc[i * 3 + 1] = o.c.g; Cc[i * 3 + 2] = o.c.b;
       }
       geo.setDrawRange(0, n);
-      for (const k of ['position', 'aSize', 'aAlpha', 'aColor']) geo.attributes[k].needsUpdate = true;
+      if (n === 0) return;
+      // 生きている粒の分だけ送る
+      for (const at of attrs) { at.clearUpdateRanges(); at.addUpdateRange(0, n * at.itemSize); at.needsUpdate = true; }
     },
     meanZ() { if (!list.length) return 0; let z = 0; for (const o of list) z += o.p.z; return z / list.length; },
   };
