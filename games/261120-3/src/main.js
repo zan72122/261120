@@ -143,9 +143,9 @@ function boot() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const bigScreen = Math.max(screen.width || 0, screen.height || 0) * dpr >= 2000;
   const weak = (navigator.hardwareConcurrency || 8) <= 4 && bigScreen;
-  // maxScale: the pixel-ratio ceiling for the current canvas size (pixel budget, see core/perf.js)
-  const maxScale0 = budgetScale(window.innerWidth || 1, window.innerHeight || 1, dpr);
-  const quality = { low: false, dpr, particleScale: 1, maxScale: maxScale0, scale: weak ? Math.max(0.6, Math.min(maxScale0, dpr * 0.75)) : maxScale0 };
+  // start within the pixel budget (core/perf.js); dynamic resolution may climb up to dpr if frames allow
+  const start0 = budgetScale(window.innerWidth || 1, window.innerHeight || 1, dpr);
+  const quality = { low: false, dpr, particleScale: 1, scale: weak ? Math.max(0.6, Math.min(start0, dpr * 0.75)) : start0 };
 
   const layoutListeners = [];
   const G = {
@@ -214,10 +214,9 @@ function boot() {
     const h = Math.max(1, window.innerHeight || canvas.clientHeight || 1);
     const changed = w !== cssW || h !== cssH;
     if (changed) {
-      const ms = budgetScale(w, h, dpr);
-      // keep the adaptive drop ratio when the ceiling moves (e.g. iPad split view)
-      quality.scale = Math.max(0.6, Math.min(ms, quality.scale * (ms / quality.maxScale)));
-      quality.maxScale = ms;
+      // a bigger canvas (e.g. leaving iPad split view) must not blow past the pixel budget
+      const b = budgetScale(w, h, dpr);
+      if (quality.scale > b && cssW * cssH < w * h) quality.scale = Math.max(0.6, b);
     }
     if (Math.abs(renderer.getPixelRatio() - quality.scale) > 1e-3) renderer.setPixelRatio(quality.scale);
     if (!changed && !force) return;
@@ -358,8 +357,8 @@ function boot() {
     }
     if (fastT > 3) {
       fastT = 0;
-      const ns = Math.min(quality.maxScale, quality.scale / 0.85);
-      const blocked = ns >= failScale - 1e-3 && failT < 20;
+      const ns = Math.min(dpr, quality.scale / 0.85);
+      const blocked = ns >= failScale - 1e-3 && failT < 45;
       if (ns > quality.scale + 1e-3 && !blocked) setScale(ns);
     }
   }

@@ -4,8 +4,9 @@ import { makeFilling } from '../tako/filling.js';
 
 // ---------- pixel budget ----------
 // Large tablets at DPR 2 push 4–6 M pixels through heavy physical materials every frame.
-// Cap the drawing-buffer size; phones at DPR 2 (≈1.3–1.6 M px) are untouched.
-export const PIXEL_BUDGET = 2.6e6;
+// Start within this drawing-buffer budget; phones at DPR 2 (≈1.3–1.7 M px) are untouched,
+// and dynamic resolution (main.js) still climbs to the full DPR when frames stay fast.
+export const PIXEL_BUDGET = 3.0e6;
 export function budgetScale(cssW, cssH, dprCap) {
   const px = Math.max(1, cssW * cssH);
   return Math.max(1, Math.min(dprCap, Math.sqrt(PIXEL_BUDGET / px)));
