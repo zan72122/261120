@@ -89,22 +89,25 @@ export function createShadowGate(renderer, scene) {
   return gate;
 }
 
-// ---------- shader warm-up ----------
+// ---------- shader warm-up (in the background) ----------
 // Compiling a program the first time a material shows up costs tens of ms on iOS (visible hitch at
-// phase changes). Render one throw-away frame at boot with every object visible and unculled, plus
-// one filling of each kind (with and without the bite clip plane), so every program exists up front.
-// Rendering twice in the same task means only the real frame ever reaches the screen.
-export function warmUp(renderer, scene, camera) {
-  const touched = [];
-  scene.traverse((o) => {
-    if (!o.visible || o.frustumCulled) touched.push([o, o.visible, o.frustumCulled]);
-  });
-  for (const [o] of touched) {
-    o.visible = true;
-    o.frustumCulled = false;
-  }
+// phase changes). Compiling all of them before the first frame, though, keeps the player waiting on a
+// dark screen. So the first frame only compiles what it shows; afterwards this generator, stepped once
+// per frame from the main loop, renders the remaining materials a few at a time (hidden props and one
+// filling of each kind, with and without the bite clip plane) into a 1×1 viewport right before the real
+// frame. Rendering through the real scene, lights and renderer keeps every program key identical to what
+// the game will ask for later. Each step yields the time it took so the batch size adapts to the device.
+const WARM_LAYER = 31;
+const now = () => performance.now();
+
+export function* warmUpGen(renderer, scene, camera, gate) {
+  const vp = new THREE.Vector4();
+  const isDrawable = (o) => (o.isMesh || o.isPoints || o.isLine || o.isSprite) && o.material;
+
+  // one filling of each kind, with and without the clip plane, parked under the table (hidden between steps)
   const extra = new THREE.Group();
-  extra.position.set(0, -500, 0); // under the table: irrelevant for the image, still rendered (unculled)
+  extra.position.set(0, -500, 0);
+  extra.visible = false;
   const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 1e5);
   for (const kind of ['octopus', 'cheese', 'sausage']) {
     for (const clip of [false, true]) {
@@ -115,26 +118,109 @@ export function warmUp(renderer, scene, camera) {
         continue;
       }
       if (clip) for (const m of f.userData.mats) m.clippingPlanes = [plane];
-      f.traverse((o) => {
-        o.frustumCulled = false;
-      });
       extra.add(f);
     }
+    yield 0;
   }
   scene.add(extra);
-  const prevClip = renderer.localClippingEnabled;
-  renderer.localClippingEnabled = true;
-  try {
-    renderer.shadowMap.needsUpdate = true;
-    renderer.render(scene, camera);
-  } finally {
-    renderer.localClippingEnabled = prevClip;
-    scene.remove(extra);
-    for (const [o, v, fc] of touched) {
-      o.visible = v;
-      o.frustumCulled = fc;
+
+  const lights = [];
+  scene.traverse((o) => {
+    if (o.isLight && !o.layers.isEnabled(WARM_LAYER)) {
+      o.layers.enable(WARM_LAYER);
+      lights.push(o);
     }
-    // materials are kept alive on purpose (disposing would release the cached programs)
-    renderer.shadowMap.needsUpdate = true;
+  });
+
+  function renderBatch(objs, shadows) {
+    const shown = [];
+    const culled = [];
+    const layered = [];
+    for (const o of objs) {
+      if (!o.layers.isEnabled(WARM_LAYER)) {
+        o.layers.enable(WARM_LAYER);
+        layered.push(o);
+      }
+      if (o.frustumCulled) {
+        o.frustumCulled = false;
+        culled.push(o);
+      }
+      for (let p = o; p; p = p.parent) {
+        if (!p.visible) {
+          p.visible = true;
+          shown.push(p);
+        }
+      }
+    }
+    const mask = camera.layers.mask;
+    const sm = renderer.shadowMap;
+    const needs = sm.needsUpdate;
+    const auto = sm.autoUpdate;
+    const clip = renderer.localClippingEnabled;
+    renderer.getViewport(vp);
+    try {
+      camera.layers.set(WARM_LAYER); // main pass: only the batch (and the lights, so program keys match)
+      sm.autoUpdate = false;
+      sm.needsUpdate = !!shadows;
+      renderer.localClippingEnabled = true;
+      renderer.setViewport(0, 0, 1, 1);
+      if (shadows) scene.updateMatrixWorld();
+      renderer.render(scene, camera);
+    } finally {
+      renderer.setViewport(vp.x, vp.y, vp.z, vp.w);
+      renderer.localClippingEnabled = clip;
+      camera.layers.mask = mask;
+      sm.autoUpdate = auto;
+      sm.needsUpdate = needs || !!shadows; // a shadow warm pass leaves a wrong map behind: redraw it
+      for (const o of layered) o.layers.disable(WARM_LAYER);
+      for (const o of culled) o.frustumCulled = true;
+      for (const o of shown) o.visible = false;
+    }
   }
+
+  // materials in scene order (props are built in the order the phases use them)
+  const byMat = new Map();
+  scene.traverse((o) => {
+    if (!isDrawable(o)) return;
+    for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+      let l = byMat.get(m);
+      if (!l) byMat.set(m, (l = []));
+      l.push(o);
+    }
+  });
+  const compiled = (m) => !!renderer.properties.get(m).currentProgram;
+  const list = [...byMat];
+  let n = 2;
+  let i = 0;
+  while (i < list.length) {
+    const batch = [];
+    let mats = 0;
+    while (mats < n && i < list.length) {
+      const [m, objs] = list[i++];
+      if (compiled(m)) continue;
+      batch.push(...objs);
+      mats++;
+    }
+    if (!batch.length) continue;
+    const t = now();
+    renderBatch(batch, false);
+    const dt = now() - t;
+    n = dt > 24 ? 1 : dt < 6 ? Math.min(n * 2, 8) : n;
+    yield dt;
+  }
+
+  // depth programs of the shadow pass (clip planes, alpha test, ...): one shadow render with every caster shown
+  const casters = [];
+  scene.traverse((o) => {
+    if (isDrawable(o) && o.castShadow) casters.push(o);
+  });
+  const t = now();
+  renderBatch(casters, true); // the shadow pass also tests the main camera's layers
+  if (gate) gate.invalidate();
+  const dt = now() - t;
+
+  scene.remove(extra);
+  for (const l of lights) l.layers.disable(WARM_LAYER);
+  // the warm-up materials are kept alive on purpose (disposing would release the cached programs)
+  return dt;
 }

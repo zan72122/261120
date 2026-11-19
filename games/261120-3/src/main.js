@@ -12,7 +12,8 @@ import { createHints } from './core/hints.js';
 import { createFx } from './core/fx.js';
 import { createSave, freshState } from './core/save.js';
 import { createFlow } from './core/flow.js';
-import { budgetScale, createShadowGate, warmUp } from './core/perf.js';
+import { budgetScale, createShadowGate, warmUpGen } from './core/perf.js';
+import { createBackground } from './core/background.js';
 
 const canvas = document.getElementById('stage');
 let stopped = false;
@@ -170,6 +171,7 @@ function boot() {
     input: null,
     save: null,
     flow: null,
+    bg: createBackground(), // work deferred until the first frames are on screen (core/background.js)
     state: freshState(),
     onLayout(fn) {
       if (typeof fn === 'function') layoutListeners.push(fn);
@@ -271,13 +273,16 @@ function boot() {
   G.flow.start(startIndex);
   if (!G.cam.box && G.layout.frames) G.cam.frame(G.layout.frames.cook, { dur: 0 });
 
-  // ---------- shader warm-up + shadow-map gating ----------
-  try {
-    warmUp(renderer, scene, camera);
-  } catch (e) {
-    console.warn('[main] warm-up failed:', e);
-  }
+  // ---------- shadow-map gating + background warm-up ----------
+  // The first frame compiles only what it shows; full-resolution textures and the remaining shaders
+  // are prepared while the player is already looking at (and playing) the first scene.
   const shadowGate = createShadowGate(renderer, scene);
+  let warm = null;
+  try {
+    warm = warmUpGen(renderer, scene, camera, shadowGate);
+  } catch (e) {
+    warm = null;
+  }
   scene.matrixWorldAutoUpdate = false; // shadowGate.update() runs the single world-matrix pass per frame
 
   // ---------- main loop ----------
@@ -303,6 +308,7 @@ function boot() {
   let failT = 0;
   let trial = null; // a pending downscale whose benefit is being checked
   let graceT = 1.2; // ignore start-up / resume hitches
+  let frames = 0;
   const MIN_SCALE = 0.6;
 
   // Dynamic resolution: aim for (near) the display refresh, not just "above 28 fps".
@@ -363,6 +369,29 @@ function boot() {
     }
   }
 
+  // Background work once the first frames are shown: one shader warm-up batch (not while a finger is
+  // dragging something: a compile hitch would be felt), then texture jobs for the rest of a small budget.
+  function background() {
+    if (++frames < 3) return;
+    let spent = 0;
+    const held = !!(G.input && G.input.pointer);
+    if (warm && !held) {
+      try {
+        const r = warm.next();
+        if (r.done) warm = null;
+        spent += r.value || 0;
+      } catch (e) {
+        warm = null;
+        console.warn('[main] warm-up failed:', e);
+      }
+    }
+    if (G.bg.pending) {
+      const budget = Math.max(1.5, Math.min(5, vsyncMs * 0.25)) * (held ? 0.5 : 1);
+      if (spent < budget) spent += G.bg.run(budget - spent);
+    }
+    if (spent > 8) graceT = Math.max(graceT, 0.25); // our own work must not read as "GPU too slow"
+  }
+
   function frame(now) {
     raf = 0;
     if (stopped || document.hidden) return;
@@ -386,6 +415,7 @@ function boot() {
     step('fx', () => G.fx.update(dt));
     step('cam', () => G.cam.update(dt));
     step('shadow', () => shadowGate.update());
+    step('background', () => background());
     step('render', () => renderer.render(scene, camera));
   }
 

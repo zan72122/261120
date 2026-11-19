@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { lathe, arc, roundRectPath, offsetContour, sweep, cap } from './geom.js';
-import { coatedMetal, smudge } from './textures.js';
+import { coatedMetalGen, smudgeGen, progressive } from './textures.js';
 
 export function buildHotplate(ctx) {
   const { cfg, low } = ctx;
@@ -12,7 +12,7 @@ export function buildHotplate(ctx) {
   group.name = 'hotplate';
 
   // ---------- cooking plate ----------
-  const cm = coatedMetal(low ? 256 : 512);
+  const cm = progressive(ctx, 128, low ? 256 : 512, coatedMetalGen, 0);
   const UVS = 1 / 6; // micro speckle repeats every 6 cm
   const plateMat = new THREE.MeshPhysicalMaterial({
     color: 0x232222,
@@ -88,7 +88,7 @@ export function buildHotplate(ctx) {
   group.add(plate);
 
   // ---------- housing (matte black heat-resistant plastic) ----------
-  const hsm = smudge(256, 0.55, 0.75, 12);
+  const hsm = progressive(ctx, 64, 256, (s) => smudgeGen(s, 0.55, 0.75, 12), 4);
   const housingMat = new THREE.MeshStandardMaterial({ color: 0x141415, roughness: 1, roughnessMap: hsm, metalness: 0, envMapIntensity: 0.9 });
   const bW = pW, bD = H.d - 6.4; // inner reference rect; outer = +3.2 each side
   const hpath = roundRectPath(bW, bD, 1.8, 10);

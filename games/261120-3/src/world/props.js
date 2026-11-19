@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { lathe, arc, roundRectPath, offsetContour, sweep, cap, rng, smooth } from './geom.js';
-import { stoneware, smallWood, flakeTex, fadeAlpha } from './textures.js';
+import { stonewareGen, smallWoodGen, flakeTex, fadeAlpha, progressive } from './textures.js';
 
 const TAU = Math.PI * 2;
 const lin = (hex) => new THREE.Color(hex); // Color() converts sRGB hex to linear working space
@@ -47,7 +47,7 @@ export function buildProps(ctx) {
   const R = rng(1234);
 
   // ---------- shared materials ----------
-  const sw = stoneware(low ? 256 : 512, [0.94, 0.92, 0.87], 21);
+  const sw = progressive(ctx, 128, low ? 256 : 512, (s) => stonewareGen(s, [0.94, 0.92, 0.87], 21), 2);
   const ceramic = (tint = 0xffffff, extra = {}) => new THREE.MeshPhysicalMaterial({
     color: tint, map: sw.map, roughnessMap: sw.roughnessMap, roughness: 1, normalMap: sw.normalMap,
     normalScale: new THREE.Vector2(0.25, 0.25), clearcoat: 0.55, clearcoatRoughness: 0.1, vertexColors: true, ...extra,
@@ -55,9 +55,9 @@ export function buildProps(ctx) {
   const white = [1, 1, 1];
   const ironRim = lin(0x6b4a33).toArray();
   const steel = new THREE.MeshStandardMaterial({ color: 0xcfd0d2, metalness: 1, roughness: 0.28 });
-  const lightWoodTex = smallWood(256, [0.74, 0.58, 0.38], [0.55, 0.39, 0.22], 3);
+  const lightWoodTex = progressive(ctx, 64, 256, (s) => smallWoodGen(s, [0.74, 0.58, 0.38], [0.55, 0.39, 0.22], 3), 3);
   const lightWood = new THREE.MeshStandardMaterial({ map: lightWoodTex, roughness: 0.55 });
-  const darkWoodTex = smallWood(256, [0.45, 0.27, 0.15], [0.28, 0.15, 0.08], 9);
+  const darkWoodTex = progressive(ctx, 64, 256, (s) => smallWoodGen(s, [0.45, 0.27, 0.15], [0.28, 0.15, 0.08], 9), 3);
   const darkWood = new THREE.MeshPhysicalMaterial({ map: darkWoodTex, roughness: 0.45, clearcoat: 0.5, clearcoatRoughness: 0.3 });
 
   const props = {};

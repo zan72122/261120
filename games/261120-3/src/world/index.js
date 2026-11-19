@@ -7,7 +7,7 @@ import { buildProps } from './props.js';
 export function buildWorld(G) {
   const { renderer, scene, cfg } = G;
   const low = !!(G.quality && G.quality.low);
-  const ctx = { cfg, low, aniso: Math.min(8, renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 4), tex: {} };
+  const ctx = { cfg, low, bg: G.bg || null, aniso: Math.min(8, renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 4), tex: {} };
 
   if (!renderer.shadowMap.enabled) {
     renderer.shadowMap.enabled = true;

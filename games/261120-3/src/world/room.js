@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { lathe, arc, roundRectPath, offsetContour, sweep, cap, freeze } from './geom.js';
-import { tableWood, windowTex, linen, stoneware } from './textures.js';
+import { tableWoodGen, windowTex, linenGen, stonewareGen, progressive } from './textures.js';
 
 // Table top extents (cm). Player at +z.
 export const TABLE = { x0: -115, x1: 135, z0: -72, z1: 88, thick: 3.6 };
@@ -11,7 +11,7 @@ export function buildTable(ctx) {
   const { low, aniso } = ctx;
   const T = TABLE;
   const w = T.x1 - T.x0, d = T.z1 - T.z0, cx = (T.x0 + T.x1) / 2, cz = (T.z0 + T.z1) / 2;
-  const tw = tableWood(low ? 512 : 1024, aniso);
+  const tw = progressive(ctx, 256, low ? 512 : 1024, (s) => tableWoodGen(s, aniso), 1);
   ctx.tex.tableWood = tw;
   const mat = new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
@@ -107,7 +107,7 @@ export function buildRoom(ctx) {
 // The family's ordinary place settings on the far side (outside the play area)
 export function buildPlaceSettings(ctx) {
   const g = new THREE.Group();
-  const sw = ctx.tex.stoneware2 || (ctx.tex.stoneware2 = stoneware(256, [0.86, 0.88, 0.89], 33));
+  const sw = ctx.tex.stoneware2 || (ctx.tex.stoneware2 = progressive(ctx, 64, 256, (s) => stonewareGen(s, [0.86, 0.88, 0.89], 33)));
   // small plate ~15 cm
   const plateProf = [
     [0, 0.25], [5.2, 0.25], [5.4, 0.0], [5.8, 0.0], [5.9, 0.3], [6.4, 0.42], [7.2, 0.9], [7.5, 1.35],
@@ -164,7 +164,7 @@ export function buildPlaceSettings(ctx) {
     im.computeBoundingSphere();
   }
   // folded cloth (linen napkin)
-  const cloth = new THREE.Mesh(new RoundedBoxGeometry(13, 1.4, 9.5, 3, 0.6), new THREE.MeshStandardMaterial({ color: 0xb8a68a, roughness: 0.9, normalMap: linen(256), normalScale: new THREE.Vector2(0.6, 0.6) }));
+  const cloth = new THREE.Mesh(new RoundedBoxGeometry(13, 1.4, 9.5, 3, 0.6), new THREE.MeshStandardMaterial({ color: 0xb8a68a, roughness: 0.9, normalMap: progressive(ctx, 64, 256, linenGen), normalScale: new THREE.Vector2(0.6, 0.6) }));
   cloth.position.set(58, 0.7, -40);
   cloth.rotation.y = -0.18;
   cloth.castShadow = cloth.receiveShadow = true;
