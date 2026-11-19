@@ -74,13 +74,15 @@
       var fov = G.lerp(36, 30, u), half = fov * DEG / 2, tv = Math.tan(half);
       // 画面上端の光線の仰角。全身は子どもの目線（ほぼ水平に見上げる）、寄りは目線を上げて少し見下ろす
       var a = G.lerp(20, 6, u) * DEG, th = half - a;
-      var bottom = G.lerp(-0.05, 0.88, u), width = G.lerp(0.9, 0.40, u), cx = G.lerp(0, 0.055, u);
+      var bottom = G.lerp(-0.05, 0.88, u), width = G.lerp(0.9, 0.36, u), cx = G.lerp(0, 0.055, u);
       var zF = L.papa.z + 0.12;                       // 構図を測る面（胸の前）
       var dF = Math.max(width / 2 / (tv * asp), (PAPA_TOP - bottom) / 2 / tv);
       var zc = zF + dF;                               // カメラの z
       var zBack = Math.min(L.papa.z, zCur) - 0.10;    // 首の後ろ（最も奥。奥にいるほど上端は高く映るので厳しく）
       // 上端の光線: y(z) = camY + (zc - z) * tan(a) を zBack で PAPA_TOP 以下に（手前ほど低い）
       var camY = PAPA_TOP - (zc - zBack) * Math.tan(a);
+      // パパが奥（廊下）にいる間もカメラを床より下げない: 高さを保ち、上端の光線を寝かせて上端の保証を守る
+      if (camY < 0.30) { camY = 0.30; a = Math.atan((PAPA_TOP - camY) / (zc - zBack)); th = half - a; }
       var ly = camY - dF * Math.tan(th);
       camPapa.fov = fov; camPapa.pitch = th / DEG; camPapa.dist = dF / Math.cos(th);
       camPapa.look[0] = cx; camPapa.look[1] = ly; camPapa.look[2] = zF;

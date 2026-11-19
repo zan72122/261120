@@ -373,7 +373,7 @@
     var stitchMat = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 1, transparent: true, opacity: 0.22, alphaMap: stitchTex, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
 
     var woolTex = getTex('wool', aniso).clone(); woolTex.repeat.set(14, 14); woolTex.needsUpdate = true;
-    var pantsMat = new THREE.MeshStandardMaterial({ color: 0x44474f, roughness: 0.93, map: woolTex });
+    var pantsMat = new THREE.MeshStandardMaterial({ color: 0x272b38, roughness: 0.93, map: woolTex });
     var pantsDark = new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
     var leatherTex = getTex('leather', aniso).clone(); leatherTex.repeat.set(30, 30); leatherTex.needsUpdate = true;
     var beltMat = new THREE.MeshPhysicalMaterial({ color: 0x2a1c13, roughness: 0.42, clearcoat: 0.35, clearcoatRoughness: 0.5, bumpMap: leatherTex, bumpScale: 0.5 });
