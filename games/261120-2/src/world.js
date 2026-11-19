@@ -16,7 +16,7 @@
 //
 // world.tank = { group, frontGlass, rimY, glassMeshes }
 //   ガラス 5 面は厚み 5mm のボックス（透明 + 環境反射 + フレネル）。小口（上端・角）は緑がかったガラスの帯。
-//   renderOrder: 奥・左右・底のガラス = -2（水より先）, 前面ガラス = 5（水より後）。水を作る側は renderOrder 0 前後で。
+//   renderOrder: 奥・左右・底のガラス = -2（水より先）, 前面ガラス = 45（水 10〜30 より後）。水槽の手前/上に来る透明な道具（鉢・ピッチャー・ホース）は 50 以上。
 //   tank の底ガラス上面 y=0.008、砂利上面 ≒ L.tank.gravelH (0.028)。水槽の下に 3mm の黒いマット。
 //
 // world.props.* は共通で { group, home:Vector3（group の初期 position）, setHighlight(v 0..1) }。
@@ -541,7 +541,7 @@ export function buildWorld(engine) {
   pane(TK.w, ph, G, TK.cx, y0 + ph / 2, z0 + G / 2, paneMat, -2); // back
   pane(G, ph, TK.d - 2 * G, x0 + G / 2, y0 + ph / 2, TK.cz, paneMat, -2); // left
   pane(G, ph, TK.d - 2 * G, x1 - G / 2, y0 + ph / 2, TK.cz, paneMat, -2); // right
-  tank.frontGlass = pane(TK.w, ph, G, TK.cx, y0 + ph / 2, z1 - G / 2, frontMat, 5);
+  tank.frontGlass = pane(TK.w, ph, G, TK.cx, y0 + ph / 2, z1 - G / 2, frontMat, 45);
   tank.frontGlass.name = 'frontGlass';
   // 小口（緑がかったガラスの縁）
   const edges = [];
@@ -558,7 +558,7 @@ export function buildWorld(engine) {
   // 底の小口（前）
   edges.push(new THREE.BoxGeometry(TK.w, G, 0.0016).translate(TK.cx, y0 + G / 2, z1 + 0.0002));
   const edgeMesh = new THREE.Mesh(mergeGeometries(edges), edgeMat);
-  edgeMesh.renderOrder = 6; tank.group.add(edgeMesh);
+  edgeMesh.renderOrder = 46; tank.group.add(edgeMesh);
   // 内側の角のシリコン
   const silMat = new THREE.MeshPhysicalMaterial({ color: 0xdfe8e4, roughness: 0.25, transparent: true, opacity: 0.22, depthWrite: false });
   const sils = [];
@@ -897,24 +897,24 @@ export function buildWorld(engine) {
     prof.push([0, iBot]);
     const bowlMat = glassMat({ opacity: 0.1, color: 0xe8f2ee, env: 1.5, edge: 0.55, spec: 1.0 });
     const glass = new THREE.Mesh(lathe(prof, 64), bowlMat);
-    glass.renderOrder = 4;
+    glass.renderOrder = 52;
     holder.add(glass);
     // 口の小口（うっすら緑）
     const lipMat = new THREE.MeshPhysicalMaterial({ color: 0x8cc4ad, roughness: 0.05, transparent: true, opacity: 0.45, depthWrite: false, envMapIntensity: 1.3 });
     const lip = new THREE.Mesh(new THREE.TorusGeometry(lc[0], lr * 1.02, 8, 64), lipMat);
-    lip.rotation.x = Math.PI / 2; lip.position.y = lc[1]; lip.renderOrder = 4;
+    lip.rotation.x = Math.PI / 2; lip.position.y = lc[1]; lip.renderOrder = 52;
     holder.add(lip);
     // 底の厚いガラス
     const baseMat = new THREE.MeshPhysicalMaterial({ color: 0xa8d0c0, roughness: 0.05, transparent: true, opacity: 0.25, depthWrite: false });
     const bRad = Math.sqrt(Rb * Rb - cy * cy);
     const base = new THREE.Mesh(new THREE.CylinderGeometry(bRad * 0.98, bRad * 0.98, iBot - 0.001, 48), baseMat);
-    base.position.y = iBot / 2; base.renderOrder = 3; holder.add(base);
+    base.position.y = iBot / 2; base.renderOrder = 50; holder.add(base);
     // 水（球のキャップ。tilt の逆回転で常に水平）
     const waterGroup = new THREE.Group(); tilt.add(waterGroup);
     const waterMat = new THREE.MeshPhysicalMaterial({ color: 0xcfe9ee, roughness: 0.04, transparent: true, opacity: 0.16, depthWrite: false, envMapIntensity: 1.2 });
     glassify(waterMat, 0.35, 0.7);
     const water = new THREE.Mesh(new THREE.BufferGeometry(), waterMat);
-    water.renderOrder = 3; waterGroup.add(water);
+    water.renderOrder = 51; waterGroup.add(water);
     const Rw = Ri - 0.0006;
     let level = 1, wy = B.waterY;
     function rebuildWater() {
@@ -1088,11 +1088,11 @@ export function buildWorld(engine) {
     const hoseMat = new THREE.MeshPhysicalMaterial({ color: 0xf4f7f5, roughness: 0.18, transparent: true, opacity: 0.22, depthWrite: false, envMapIntensity: 1.2 });
     glassify(hoseMat, 0.65, 0.7);
     const hose = new THREE.Mesh(new THREE.TubeGeometry(hCurve, 120, 0.0055, 12, false), hoseMat);
-    hose.renderOrder = 6;
+    hose.renderOrder = 53;
     const hfTex = fTex.clone(); hfTex.repeat.set(14, 1); hfTex.needsUpdate = true;
     const hFlowMat = flowMat.clone(); hFlowMat.map = hfTex;
     const hoseFlow = new THREE.Mesh(new THREE.TubeGeometry(hCurve, 120, 0.0038, 8, false), hFlowMat);
-    hoseFlow.visible = false; hoseFlow.renderOrder = 5;
+    hoseFlow.visible = false; hoseFlow.renderOrder = 52;
     group.add(hose, hoseFlow);
     setShadow(bulbG); clip.castShadow = true; collar.castShadow = true;
     root.add(group);
@@ -1149,7 +1149,7 @@ export function buildWorld(engine) {
     }
     geo.computeVertexNormals();
     const pMat = glassMat({ opacity: 0.1, color: 0xf2f5f4, env: 1.4, edge: 0.55, spec: 0.9, roughness: 0.05 });
-    const body = new THREE.Mesh(geo, pMat); body.renderOrder = 4;
+    const body = new THREE.Mesh(geo, pMat); body.renderOrder = 52;
     holder.add(body);
     // 小口の縁取り（プラスチックのフチが少し白っぽく見える）
     const rimMat = new THREE.MeshPhysicalMaterial({ color: 0xe8efee, transparent: true, opacity: 0.35, roughness: 0.1, depthWrite: false });
@@ -1172,7 +1172,7 @@ export function buildWorld(engine) {
       marks.push(g);
     }
     const markMat = new THREE.MeshStandardMaterial({ color: 0x5f86b0, roughness: 0.5, transparent: true, opacity: 0.85 });
-    const markMesh = new THREE.Mesh(mergeGeometries(marks), markMat); markMesh.renderOrder = 5;
+    const markMesh = new THREE.Mesh(mergeGeometries(marks), markMat); markMesh.renderOrder = 53;
     holder.add(markMesh);
     // 水（world 水平のクリップ面で切る）
     const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
@@ -1181,11 +1181,11 @@ export function buildWorld(engine) {
     const innerH = h - baseT - 0.006;
     const wGeo = new THREE.CylinderGeometry(rAt(h) - t - 0.0008, rb - t - 0.0008, innerH, 40);
     wGeo.translate(0, baseT + 0.0005 + innerH / 2, 0);
-    const water = new THREE.Mesh(wGeo, wMat); water.renderOrder = 3;
+    const water = new THREE.Mesh(wGeo, wMat); water.renderOrder = 50;
     holder.add(water);
     const sMat = new THREE.MeshPhysicalMaterial({ color: 0xd4ecf2, roughness: 0.03, transparent: true, opacity: 0.22, depthWrite: false, envMapIntensity: 1.4, side: THREE.DoubleSide });
     glassify(sMat, 0.3, 0.9);
-    const surf = new THREE.Mesh(new THREE.CircleGeometry(1, 48), sMat); surf.rotation.x = -Math.PI / 2; surf.renderOrder = 3;
+    const surf = new THREE.Mesh(new THREE.CircleGeometry(1, 48), sMat); surf.rotation.x = -Math.PI / 2; surf.renderOrder = 51;
     group.add(surf);
     const spout = new THREE.Object3D(); spout.position.set(-(rt + 0.017), h + 0.005, 0); holder.add(spout);
     root.add(group);
@@ -1352,7 +1352,7 @@ export function buildWorld(engine) {
   // ================================================================ halo
   const haloTex = radialTexture([[0, 'rgba(255,214,150,1)'], [0.25, 'rgba(255,190,110,0.55)'], [0.6, 'rgba(255,160,80,0.16)'], [1, 'rgba(255,150,70,0)']], 128);
   const haloMat = new THREE.SpriteMaterial({ map: haloTex, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: true, transparent: true, opacity: 0, toneMapped: false });
-  const haloSprite = new THREE.Sprite(haloMat); haloSprite.renderOrder = 20; haloSprite.visible = false;
+  const haloSprite = new THREE.Sprite(haloMat); haloSprite.renderOrder = 60; haloSprite.visible = false;
   root.add(haloSprite);
   let haloOn = false, haloV = 0, haloR = 0.08;
   const halo = {
