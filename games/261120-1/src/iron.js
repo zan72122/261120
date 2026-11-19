@@ -772,7 +772,7 @@
             while (k < EMIT.length - 1 && pick > EMIT[k].w) { pick -= EMIT[k].w; k++; }
             var em = EMIT[k];
             puffLocal(em.x + (rnd() - 0.5) * 0.02, 0.003, em.z + (rnd() - 0.5) * 0.03, em.dx, 0, em.dz,
-              0.10 + rnd() * 0.18, 0.03 + rnd() * 0.05, 0.022 + rnd() * 0.012, 0.08 + rnd() * 0.09, 0.9 + rnd() * 0.8, 0.34);
+              0.10 + rnd() * 0.18, 0.04 + rnd() * 0.06, 0.026 + rnd() * 0.014, 0.11 + rnd() * 0.12, 1.1 + rnd() * 0.9, 0.38);
           }
         } else emitAcc = 0;
         // 台・かかと立ちのときの細い湯気

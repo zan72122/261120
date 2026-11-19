@@ -53,7 +53,7 @@
     function sleeve(s) {
       var p = new Path2D(), o0 = sPt(s, 0.025, 1), o1 = sPt(s, SL, 1), i1 = sPt(s, SL, -1), i0 = sPt(s, 0.035, -1);
       p.moveTo(s * 0.247, -0.338);
-      p.quadraticCurveTo(s * 0.312, -0.336, o0[0], o0[1]);
+      p.quadraticCurveTo(s * 0.305, -0.322, o0[0], o0[1]);
       p.lineTo(o1[0], o1[1]); p.lineTo(i1[0], i1[1]); p.lineTo(i0[0], i0[1]);
       p.quadraticCurveTo(s * 0.198, -0.285, s * 0.247, -0.338); p.closePath();
       return p;
@@ -213,12 +213,12 @@
     g.fillStyle = css(base, 0.93); g.beginPath(); g.moveTo(-0.03, -0.355); g.lineTo(0.03, -0.355); g.lineTo(0.0, -0.33); g.closePath(); g.fill();
     // 首の内側（後ろの台えりの裏）
     var ng = g.createLinearGradient(0, -0.383, 0, -0.351);
-    ng.addColorStop(0, css(base, 0.62)); ng.addColorStop(0.55, css(base, 0.78)); ng.addColorStop(1, css(base, 0.9));
+    ng.addColorStop(0, css(base, 0.7)); ng.addColorStop(0.5, css(base, 0.84)); ng.addColorStop(1, css(base, 0.95));
     g.save(); g.clip(P.neck); g.fillStyle = ng; g.fillRect(-0.06, -0.39, 0.12, 0.05);
     g.strokeStyle = 'rgba(0,0,0,0.25)'; g.lineWidth = 0.0035; g.stroke(P.neck); g.restore();
     g.strokeStyle = css(base, 1.06); g.lineWidth = 0.0012; g.beginPath(); g.ellipse(0, -0.367, 0.057, 0.0168, 0, 0.15, Math.PI - 0.15); g.stroke();
     dashLine(g, [[-0.05, -0.373], [-0.02, -0.379], [0.02, -0.379], [0.05, -0.373]], threadD, 0.0006);
-    g.strokeStyle = css(base, 0.8, 0.6); g.lineWidth = 0.003; g.stroke(P.collar);
+    g.strokeStyle = css(base, 0.84, 0.6); g.lineWidth = 0.0022; g.stroke(P.collar);
     g.restore();
     stitchInset(g, layer, P.collar, 0.0055, thread, 0.0007);
     // 羽根の折り山（光る線）
@@ -451,7 +451,7 @@
   // ---- シェーダ ----
   var GL_PARS = [
     'uniform sampler2D uWrk; uniform sampler2D uMask; uniform sampler2D uDet;',
-    'uniform vec4 uRect; uniform float uWAmp; uniform vec4 uShape; uniform float uShapeBR; uniform float uBulge;',
+    'uniform vec3 uBase; uniform vec4 uRect; uniform float uWAmp; uniform vec4 uShape; uniform float uShapeBR; uniform float uBulge;',
     'uniform float uStA; uniform float uStB; uniform float uMix; uniform float uStagger;',
     'uniform vec4 uHeap; uniform vec4 uLift; uniform vec4 uHung; uniform float uSwing2; uniform vec4 uMisc;',
     'varying vec2 vShFlat;',
@@ -474,28 +474,32 @@
     '  float cf = det.g; float cin = smoothstep(0.52, 0.565, cf); float ch = max(cf - 0.5, 0.0) * 2.0;',
     '  float cs = uShape.x; float csc = clamp(cs, 0.0, 1.0);',
     '  float h = 0.0015;',
-    '  h += cin * (0.0025 + ch * 0.014) * cs;',
+    '#ifdef SH_COLLAR',
+    '  h += 0.0009 + cin * (0.0025 + ch * 0.0105) * cs;',
     '  vec2 ap = vec2(abs(p.x), p.y);',
     '  float tip = cin * smoothstep(0.055, 0.0, length(ap - vec2(0.062, -0.29)));',
     '  float edge = cin * smoothstep(0.62, 0.5, cf);',
-    '  h += (1.0 - csc) * (cin * 0.0015 + edge * 0.0025 * shNoise(p * 9.0 + 2.0) + tip * tip * (p.x > 0.0 ? 0.016 : 0.009));',
+    '  h += (1.0 - csc) * (cin * 0.0015 + edge * 0.0025 * shNoise(p * 9.0 + 2.0) + tip * tip * (p.x > 0.0 ? 0.011 : 0.007));',
+    '#endif',
     '  vec3 sc = shSleeve(p); float ss = clamp(p.x < 0.0 ? uShape.y : uShape.z, 0.0, 1.0);',
     '  float cuff = sc.z * smoothstep(SH_SL - 0.075, SH_SL - 0.055, sc.x);',
-    '  h += (1.0 - ss) * cuff * (0.004 + 0.0035 * sin(sc.y * 45.0 + sc.x * 30.0 + p.x * 9.0));',
+    '  h += (1.0 - ss) * cuff * (0.003 + 0.0025 * sin(sc.y * 40.0 + sc.x * 30.0 + p.x * 9.0));',
     '  h += cuff * ss * 0.0015;',
-    '  vec2 bq = (p - vec2(' + BULGE_C[0] + ', ' + BULGE_C[1] + ')) / vec2(0.028, 0.036); float bb = max(0.0, 1.0 - dot(bq, bq));',
+    '  vec2 bq = (p - vec2(' + BULGE_C[0] + ', ' + BULGE_C[1] + ')) / vec2(0.03, 0.04); float bb = max(0.0, 1.0 - dot(bq, bq));',
     '  h += uBulge * 0.025 * bb * bb * (3.0 - 2.0 * bb);',
     '  return h; }',
     'vec3 shHeapP(vec2 p, float fh){',
     '  vec2 d = p - vec2(0.0, -0.02); float r = length(d); float ang = atan(d.y, d.x);',
-    '  float n1 = shNoise(p * 6.0 + 3.1); float n2 = shNoise(p * 11.0 + 7.3); float n3 = shNoise(p * 23.0 + 1.7);',
-    '  ang += (n1 - 0.5) * 1.5 * smoothstep(0.02, 0.3, r) + uHeap.w;',
-    '  float rr = 0.155 * (1.0 - exp(-r / 0.14)); rr *= 0.84 + 0.32 * n2;',
-    '  float k = clamp(rr / 0.165, 0.0, 1.0);',
-    '  float y = 0.122 * pow(max(1.0 - k * k, 0.0), 0.6);',
-    '  y += ((n1 - 0.5) * 0.06 + (n3 - 0.5) * 0.022) * (1.0 - 0.5 * k) + fh * 0.6;',
-    '  y = max(y, 0.004 + 0.008 * n3);',
-    '  return uHeap.xyz + vec3(cos(ang) * rr, y, sin(ang) * rr); }',
+    '  float n1 = shNoise(p * 6.5 + 3.1); float n2 = shNoise(p * 13.0 + 7.3); float n3 = shNoise(p * 26.0 + 1.7); float n4 = shNoise(p.yx * 9.0 + 5.5);',
+    '  float r1 = 1.0 - abs(2.0 * n1 - 1.0); float r2 = 1.0 - abs(2.0 * n2 - 1.0); float r4 = 1.0 - abs(2.0 * n4 - 1.0);',
+    '  ang += (n4 - 0.5) * 1.8 * smoothstep(0.02, 0.3, r) + uHeap.w;',
+    '  float rr = 0.132 * (1.0 - exp(-r / 0.13)); rr *= 0.86 + 0.26 * n2;',
+    '  float k = clamp(rr / 0.15, 0.0, 1.0);',
+    '  float y = 0.105 * pow(max(1.0 - k * k, 0.0), 0.55);',
+    '  y += (r1 * 0.05 + r4 * 0.03 + r2 * 0.018 + (n3 - 0.5) * 0.012 - 0.045) * (1.0 - 0.45 * k) + fh * 0.6;',
+    '  y = max(y, 0.004 + 0.01 * n3);',
+    '  vec2 lat = vec2(cos(ang), sin(ang)) * rr + (vec2(n2, n4) - 0.5) * 0.03 * (1.0 - k);',
+    '  return uHeap.xyz + vec3(lat.x, y, lat.y); }',
     'vec3 shLiftP(vec2 p, float fh){',
     '  float s = p.y - SH_ZC; float hg = max(uLift.y - 0.0015, 0.0);',
     '  float rb = min(0.05, hg * 0.5 + 0.0005); float hv = hg - rb; float arc = 1.5708 * rb;',
@@ -518,7 +522,8 @@
     '  float s = pp.y - SH_ZC; float ax = abs(pp.x);',
     '  float bodyW = (1.0 - smoothstep(0.235, 0.27, ax)) * (1.0 - sw);',
     '  float bul = 0.036 * cos(clamp(pp.x / 0.27, -1.0, 1.0) * 1.5708) * smoothstep(-0.01, 0.13, s);',
-    '  vec3 loc = vec3(pp.x, -s, bul * bodyW + fh + 0.007 * sw - 0.003 * (1.0 - bodyW) * (1.0 - sw));',
+    '  float drape = 0.0045 * sin(pp.x * 31.0 + 0.7) * smoothstep(0.15, 0.7, s) * bodyW;',
+    '  vec3 loc = vec3(pp.x, -s, bul * bodyW + drape + fh + 0.007 * sw - 0.003 * (1.0 - bodyW) * (1.0 - sw));',
     '  float a = uHung.w + uSwing2 * max(s, 0.0) * 2.0; float ca = cos(a); float sa = sin(a);',
     '  loc.xy = vec2(ca * loc.x - sa * loc.y, sa * loc.x + ca * loc.y);',
     '  return uHung.xyz + loc; }',
@@ -543,7 +548,7 @@
     '  P = shPos(p); vec3 px = shPos(p + vec2(E, 0.0)); vec3 pz = shPos(p + vec2(0.0, E));',
     '  T = normalize(px - P); B = normalize(pz - P); N = normalize(cross(B, T));',
     '  vec2 uv = shUvOf(p);',
-    '  P += N * texture2D(uWrk, uv).r * texture2D(uMask, uv).r * uWAmp; }'
+    '  P += N * textureLod(uWrk, uv, 2.0).r * texture2D(uMask, uv).r * uWAmp; }'
   ].join('\n');
 
   var GL_FPARS = [
@@ -564,6 +569,12 @@
     'vec4 shWr = texture2D(uWrk, shUv0);',
     'vec2 shG = (shWr.gb - 0.5) * 6.0 * shAmt * uGradK;',
     'vec4 shD = texture2D(uDet, shMuv);',
+    'float shCf = texture2D(uDet, shUv0).g;',
+    '#ifdef SH_COLLAR',
+    'if (shCf < 0.535) discard;',
+    '#else',
+    'if (shCf > 0.535) diffuseColor.rgb = uBase * 0.42;',
+    '#endif',
     'float shDl = texture2D(uDet, shMuv - vec2(uDetTexel.x, 0.0)).r; float shDr = texture2D(uDet, shMuv + vec2(uDetTexel.x, 0.0)).r;',
     'float shDu = texture2D(uDet, shMuv - vec2(0.0, uDetTexel.y)).r; float shDd = texture2D(uDet, shMuv + vec2(0.0, uDetTexel.y)).r;',
     'shG += vec2((shDr - shDl) / (2.0 * uDetTexel.x / uRect.z), (shDd - shDu) / (2.0 * uDetTexel.y / uRect.w)) * 0.0022;',
@@ -642,13 +653,13 @@
     // ユニフォーム（本体と影で共有）
     var U = {
       uWrk: { value: wrkTex }, uMask: { value: maskTex }, uDet: { value: det.tex }, uWeave: { value: weaveTex },
-      uRect: { value: new THREE.Vector4(X0, Z0, 1 / LW, 1 / LD) }, uWAmp: { value: 0.016 },
+      uRect: { value: new THREE.Vector4(X0, Z0, 1 / LW, 1 / LD) }, uWAmp: { value: 0.012 },
       uShape: { value: new THREE.Vector4(0, 0, 0, 0) }, uShapeBR: { value: 0 }, uBulge: { value: 0 },
       uStA: { value: ST_HEAP }, uStB: { value: ST_FLAT }, uMix: { value: 0 }, uStagger: { value: 0 },
       uHeap: { value: new THREE.Vector4(0, 0, 0, 0) }, uLift: { value: new THREE.Vector4(0, 0.3, ZC, 0) },
       uHung: { value: new THREE.Vector4(0, 1, -1, 0) }, uSwing2: { value: 0 },
       uMisc: { value: new THREE.Vector4(0, 0, 0, 0) },
-      uDetTexel: { value: new THREE.Vector2(1 / DW, 1 / DH) }, uGradK: { value: 2.8 }, uGlow: { value: 0 }, uSheen: { value: new THREE.Vector2(-9, 0) }
+      uDetTexel: { value: new THREE.Vector2(1 / DW, 1 / DH) }, uBase: { value: new THREE.Color(1, 1, 1) }, uGradK: { value: 10.0 }, uGlow: { value: 0 }, uSheen: { value: new THREE.Vector2(-9, 0) }
     };
     function injectVertex(shader, withNormal) {
       for (var k in U) shader.uniforms[k] = U[k];
@@ -662,42 +673,61 @@
         shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', ev + '\nvec3 transformed = shP3;');
       }
     }
-    var mat = new THREE.MeshPhysicalMaterial({
-      map: colorTex, color: 0xffffff, roughness: 0.88, metalness: 0,
-      sheen: 0.22, sheenRoughness: 0.6, sheenColor: new THREE.Color(0xffffff), envMapIntensity: 0.42,
-      side: THREE.DoubleSide, alphaTest: 0.5
-    });
-    mat.onBeforeCompile = function (shader) {
-      injectVertex(shader, true);
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', '#include <common>\n' + GL_PARS + '\n' + GL_FPARS)
-        .replace('#include <map_fragment>', GL_FMAP)
-        .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = roughness * (1.0 - 0.28 * shWet) * (1.0 - 0.07 * (1.0 - shAmt));')
-        .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = normalize(normalize(vNormal) - shG.x * normalize(vShT) - shG.y * normalize(vShB)) * faceDirection;')
-        .replace('#include <emissivemap_fragment>', [
-          '#include <emissivemap_fragment>',
-          'float shBand = uSheen.y * exp(-pow((dot(shP, vec2(0.86, 0.5)) - uSheen.x) / 0.06, 2.0));',
-          'totalEmissiveRadiance += diffuseColor.rgb * (uGlow * (0.06 + 0.3 * shD.b) + shBand * 0.22);'
-        ].join('\n'));
-    };
-    mat.customProgramCacheKey = function () { return 'shirt-main'; };
-    var depthMat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: colorTex, alphaTest: 0.5, side: THREE.DoubleSide });
-    depthMat.onBeforeCompile = function (shader) { injectVertex(shader, false); };
-    depthMat.customProgramCacheKey = function () { return 'shirt-depth'; };
-
-    var SEGX = low ? 120 : 180, SEGZ = low ? 106 : 160;
-    var geo = new THREE.PlaneGeometry(LW, LD, SEGX, SEGZ);
-    geo.rotateX(-Math.PI / 2);          // 平面を XZ に（+Y 向き）。uv: v は z と逆向きなので作り直す
-    var pos = geo.attributes.position, uvA = geo.attributes.uv;
-    for (var vi = 0; vi < pos.count; vi++) {
-      pos.setX(vi, pos.getX(vi) + X0 + LW / 2); pos.setZ(vi, pos.getZ(vi) + Z0 + LD / 2); pos.setY(vi, 0);
-      uvA.setXY(vi, (pos.getX(vi) - X0) / LW, (pos.getZ(vi) - Z0) / LD);
+    function makeMat(collar) {
+      var pre = collar ? '#define SH_COLLAR\n' : '';
+      var m = new THREE.MeshPhysicalMaterial({
+        map: colorTex, color: 0xffffff, roughness: 0.88, metalness: 0,
+        sheen: 0.22, sheenRoughness: 0.6, sheenColor: new THREE.Color(0xffffff), envMapIntensity: 0.42,
+        side: THREE.DoubleSide, alphaTest: 0.5
+      });
+      m.onBeforeCompile = function (shader) {
+        injectVertex(shader, true);
+        shader.vertexShader = pre + shader.vertexShader;
+        shader.fragmentShader = pre + shader.fragmentShader
+          .replace('#include <common>', '#include <common>\n' + GL_PARS + '\n' + GL_FPARS)
+          .replace('#include <map_fragment>', GL_FMAP)
+          .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = roughness * (1.0 - 0.28 * shWet) * (1.0 - 0.07 * (1.0 - shAmt));')
+          .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = normalize(normalize(vNormal) - shG.x * normalize(vShT) - shG.y * normalize(vShB)) * faceDirection;')
+          .replace('#include <emissivemap_fragment>', [
+            '#include <emissivemap_fragment>',
+            'float shBand = uSheen.y * exp(-pow((dot(shP, vec2(0.86, 0.5)) - uSheen.x) / 0.06, 2.0));',
+            'totalEmissiveRadiance += diffuseColor.rgb * (uGlow * (0.06 + 0.3 * shD.b) + shBand * 0.22);'
+          ].join('\n'));
+      };
+      m.customProgramCacheKey = function () { return collar ? 'shirt-collar' : 'shirt-main'; };
+      var d = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: colorTex, alphaTest: 0.5, side: THREE.DoubleSide });
+      d.onBeforeCompile = function (shader) {
+        injectVertex(shader, false);
+        shader.vertexShader = pre + shader.vertexShader;
+        if (collar) {
+          shader.fragmentShader = 'uniform sampler2D uDet;\n' + shader.fragmentShader.replace('#include <alphatest_fragment>',
+            '#include <alphatest_fragment>\nif (texture2D(uDet, vMapUv).g < 0.535) discard;');
+        }
+      };
+      d.customProgramCacheKey = function () { return collar ? 'shirt-collar-depth' : 'shirt-depth'; };
+      return { mat: m, depth: d };
     }
-    geo.computeBoundingSphere();
-    var mesh = new THREE.Mesh(geo, mat);
-    mesh.customDepthMaterial = depthMat;
+    var mm = makeMat(false), mc = makeMat(true), mat = mm.mat;
+    function sheetGeo(x0, z0, w, d, sx, sz) {
+      var g = new THREE.PlaneGeometry(w, d, sx, sz);
+      g.rotateX(-Math.PI / 2);
+      var pa = g.attributes.position, ua = g.attributes.uv;
+      for (var i = 0; i < pa.count; i++) {
+        pa.setX(i, pa.getX(i) + x0 + w / 2); pa.setZ(i, pa.getZ(i) + z0 + d / 2); pa.setY(i, 0);
+        ua.setXY(i, (pa.getX(i) - X0) / LW, (pa.getZ(i) - Z0) / LD);
+      }
+      g.computeBoundingSphere();
+      return g;
+    }
+    var SEGX = low ? 120 : 180, SEGZ = low ? 106 : 160;
+    var mesh = new THREE.Mesh(sheetGeo(X0, Z0, LW, LD, SEGX, SEGZ), mm.mat);
+    mesh.customDepthMaterial = mm.depth;
     mesh.castShadow = true; mesh.receiveShadow = true; mesh.frustumCulled = false;
     group.add(mesh);
+    var collarMesh = new THREE.Mesh(sheetGeo(-0.125, -0.42, 0.25, 0.15, low ? 60 : 100, low ? 36 : 60), mc.mat);
+    collarMesh.customDepthMaterial = mc.depth;
+    collarMesh.castShadow = true; collarMesh.receiveShadow = true; collarMesh.frustumCulled = false;
+    group.add(collarMesh);
 
     // 山の芯（すき間から見える内側の布）
     var coreGeo = new THREE.SphereGeometry(1, 28, 16);
@@ -707,7 +737,7 @@
         var x = p.getX(i), y = p.getY(i), z = p.getZ(i);
         var n = G.noise2(x * 2.2 + 5, z * 2.2 + y * 1.7, 41) - 0.5, n2 = G.noise2(x * 6 + 1, z * 6 - y * 3, 42) - 0.5;
         var r = 1 + n * 0.35 + n2 * 0.12;
-        p.setXYZ(i, x * r * 0.13, Math.max(0.03, (y * r * 0.08 + 0.055)), z * r * 0.13);
+        p.setXYZ(i, x * r * 0.105, Math.max(0.02, (y * r * 0.05 + 0.035)), z * r * 0.105);
       }
       coreGeo.computeVertexNormals();
     })();
@@ -796,7 +826,7 @@
     // 姿の点（CPU 版。当たり判定・ポケット位置・中心点に使う、ローカル → world）
     function flatH(x, z) {
       var h = 0.002;
-      var bx = (x - BULGE_C[0]) / 0.028, bz = (z - BULGE_C[1]) / 0.036, bb = Math.max(0, 1 - bx * bx - bz * bz);
+      var bx = (x - BULGE_C[0]) / 0.03, bz = (z - BULGE_C[1]) / 0.04, bb = Math.max(0, 1 - bx * bx - bz * bz);
       return h + self.pocketBulge * 0.025 * bb * bb * (3 - 2 * bb);
     }
     function stateP(st, x, z, out) {
@@ -850,16 +880,20 @@
     }
 
     // ---- 公開 API ----
+    function applyColor(ci) {
+      if (ci === colorIndex) return;
+      colorIndex = ci;
+      drawColor(colorCv, layerCv, G.SHIRT_COLORS[ci]);
+      colorTex.needsUpdate = true;
+      coreMat.color.setHex(G.SHIRT_COLORS[ci]).multiplyScalar(0.8);
+      coreMat.sheenColor.setHex(G.SHIRT_COLORS[ci]);
+      mm.mat.sheenColor.setHex(G.SHIRT_COLORS[ci]).lerp(new THREE.Color(0xffffff), 0.4);
+      mc.mat.sheenColor.copy(mm.mat.sheenColor);
+      U.uBase.value.setHex(G.SHIRT_COLORS[ci]);
+    }
     self.reset = function (ci) {
       ci = (ci | 0); var n = G.SHIRT_COLORS.length; ci = ((ci % n) + n) % n;
-      if (ci !== colorIndex) {
-        colorIndex = ci;
-        drawColor(colorCv, layerCv, G.SHIRT_COLORS[ci]);
-        colorTex.needsUpdate = true;
-        coreMat.color.setHex(G.SHIRT_COLORS[ci]).multiplyScalar(0.8);
-        coreMat.sheenColor.setHex(G.SHIRT_COLORS[ci]);
-        mat.sheenColor.setHex(G.SHIRT_COLORS[ci]).lerp(new THREE.Color(0xffffff), 0.4);
-      }
+      applyColor(ci);
       regenWrinkles();
       for (var i = 0; i < amt.length; i++) { amt[i] = 1; wet[i] = 0; }
       for (var r = 0; r < 5; r++) { shape[r] = 0; shapeV[r] = 0; finishing[r] = 0; self.regions[r].done = false; }
@@ -1029,7 +1063,7 @@
       try {
         if (obj && typeof obj === 'object') {
           var ci = obj.color | 0;
-          if (ci !== colorIndex) { colorIndex = ((ci % G.SHIRT_COLORS.length) + G.SHIRT_COLORS.length) % G.SHIRT_COLORS.length; drawColor(colorCv, layerCv, G.SHIRT_COLORS[colorIndex]); colorTex.needsUpdate = true; coreMat.color.setHex(G.SHIRT_COLORS[colorIndex]).multiplyScalar(0.8); }
+          applyColor(((ci % G.SHIRT_COLORS.length) + G.SHIRT_COLORS.length) % G.SHIRT_COLORS.length);
           var S = 24, raw = typeof obj.mask === 'string' ? atob(obj.mask) : '';
           if (raw.length === S * S) {
             for (var j = 0; j < MASK_N; j++) for (var i = 0; i < MASK_N; i++) {
@@ -1140,7 +1174,7 @@
       var mA = 1 - U.uMix.value, mB = U.uMix.value;
       if (U.uStA.value === ST_HEAP) wHeap += mA; if (U.uStB.value === ST_HEAP && U.uMix.value > 0) wHeap += mB;
       if (U.uStA.value === ST_FLAT) wFlat += mA; if (U.uStB.value === ST_FLAT && U.uMix.value > 0) wFlat += mB;
-      if (trans && trans.kind === 'unfurl') wHeap = 1 - clamp(trans.t / 0.3, 0, 1);
+      if (trans && trans.kind === 'unfurl') wHeap = 1 - clamp(trans.t / 0.16, 0, 1);
       core.visible = wHeap > 0.01 && self.mode !== 'gone';
       if (core.visible) {
         var hp = U.uHeap.value, cs = Math.pow(wHeap, 0.6);
