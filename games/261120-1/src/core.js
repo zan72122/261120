@@ -629,6 +629,8 @@
     // ---------------- ループ ----------------
     var rafId = 0, last = 0, running = false, ctxLost = false;
     var shadows = app.shadows = makeShadowCache(scene);
+    // 行列の更新は shadows.update で 1 回だけ行う（render 側での 2 回目を省く）
+    scene.matrixWorldAutoUpdate = false;
     // 隠れている物（パパなど）のシェーダも最初に作っておき、登場の瞬間に止まらないようにする
     try { renderer.compile(scene, camera); } catch (e) { report('compile', e); }
     // 速度に応じた解像度の調整。
@@ -696,7 +698,7 @@
       app.time += dt;
       try { G.cam.update(dt); } catch (e) { report('cam.update', e); }
       callFlow('update', dt, app.time);
-      try { shadows.update(); } catch (e) { report('shadows', e); shadows.invalidate(); scene.traverse(function (o) { if (o.isLight && o.shadow) o.shadow.autoUpdate = true; }); }
+      try { shadows.update(); } catch (e) { report('shadows', e); shadows.invalidate(); scene.matrixWorldAutoUpdate = true; scene.traverse(function (o) { if (o.isLight && o.shadow) o.shadow.autoUpdate = true; }); }
       try { renderer.render(scene, camera); } catch (e) { report('render', e); }
       perfStep(raw, dt);
     }
