@@ -116,8 +116,9 @@ vec3 beniC = mix(${lin('#d8455a')}, ${lin('#a8392f')}, cooked);
 tcol = mix(tcol, negiC, tx.b * fleckVis);
 tcol = mix(tcol, beniC, tx.a * fleckVis);
 float takoSauce = smoothstep(0.12, 0.55, vTako.y + (tx.g - 0.5) * 0.35);
-vec3 sauceC = ${lin('#4e2410')} * (0.75 + 0.5 * tx.g) * (0.85 + 0.3 * tx.r);
-tcol = mix(tcol, sauceC, takoSauce);
+vec3 sauceC = ${lin('#6b3013')} * (0.75 + 0.5 * tx.g) * (0.85 + 0.3 * tx.r);
+// a brushed-on glaze: the golden crust still glows through a little
+tcol = mix(tcol, sauceC + tcol * 0.1, takoSauce * 0.94);
 float takoRawness = 1.0 - cooked;
 bool takoCutFace = uCut > 0.5 && !gl_FrontFacing;
 float takoCutD = 0.0;
@@ -140,7 +141,7 @@ diffuseColor.rgb = tcol;
 
 const ROUGH_F = /* glsl */ `
 float roughnessFactor = mix(0.2, 0.5, cooked) * (0.9 + 0.25 * tx.r);
-roughnessFactor = mix(roughnessFactor, 0.2, takoSauce);
+roughnessFactor = mix(roughnessFactor, 0.27, takoSauce);
 if (takoCutFace) roughnessFactor = mix(0.55, 0.3, takoRawness);
 `;
 

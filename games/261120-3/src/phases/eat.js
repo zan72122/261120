@@ -77,7 +77,7 @@ function mouthPoint(G, out) {
   const c = G.camera;
   const th = Math.tan((c.fov * Math.PI) / 360);
   const short = Math.min(th, th * c.aspect);
-  const d = Math.max(15, Math.min(40, G.cfg.BALL_R / (0.42 * short)));
+  const d = Math.max(15, Math.min(40, G.cfg.BALL_R / (0.54 * short)));
   out.copy(c.position).addScaledVector(camF, d).addScaledVector(camU, -th * d * 0.14);
   // pick handle toward the bottom-right of the screen (the hand), slightly toward the viewer
   dirMouth.set(0, 0, 0).addScaledVector(camR, 0.5).addScaledVector(camU, -0.8).addScaledVector(camF, 0.3).normalize();

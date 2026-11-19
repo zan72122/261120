@@ -70,7 +70,7 @@ function mayoHeld(G, target, t) {
   landingPoint(G, target, land);
   heldPos.copy(land);
   heldPos.y = Math.max(land.y + 1.2, ballTopY(G) + 0.7);
-  lean.set(0.42, 0.85, 0.5).normalize();
+  lean.set(0.8, 0.56, -0.22).normalize(); // lies over to the right / up-screen so the nozzle and the line stay visible
   heldQuat.setFromUnitVectors(UP, lean);
   if (S.sputter >= 0) {
     // shudder while it runs empty
@@ -104,7 +104,7 @@ function needyIdx(G) {
 function progress() {
   let ok = 0;
   for (let i = 0; i < 12; i++) if (S.blobs[i] >= NEED) ok++;
-  return Math.max(S.total / 420, Math.min(S.total / 260, ok / 9));
+  return Math.max(S.total / 480, Math.min(S.total / 200, ok / 12));
 }
 
 export default {
@@ -243,7 +243,7 @@ export default {
       let ok = 0;
       for (let i = 0; i < 12; i++) if (S.blobs[i] >= NEED) ok++;
       const alive = dressBalls(G, list).length;
-      if ((ok >= Math.min(9, alive) && S.total >= 260) || S.total >= 420 || S.heldT > 30) {
+      if ((ok >= alive && S.total >= 200) || S.total >= 480 || S.heldT > 30) {
         S.sputter = 0;
         G.audio.play('sputter', { vol: 1 });
         G.audio.play('giggle', { vol: 0.5, delay: 0.75 });

@@ -225,7 +225,7 @@ export function createBits(G, balls) {
     else if (k === 'beni') { x = 0.6 + rnd() * 0.7; y = 1; z = 0.7 + rnd() * 0.6; }
     else if (k === 'aonori') { const s = 0.5 + rnd() * 1.0; x = s; y = 1; z = s * (0.6 + rnd() * 0.6); }
     else if (k === 'mayo') { const s = 0.92 + rnd() * 0.16; x = s; y = s * (0.9 + rnd() * 0.2); z = s; }
-    else if (k === 'flake') { const len = 1.0 + rnd() * 0.9; x = len; y = len; z = 0.5 + rnd() * 0.45; }
+    else if (k === 'flake') { const len = 1.25 + rnd() * 1.0; x = len; y = len; z = 0.62 + rnd() * 0.5; }
     P.sc[i * 3] = x; P.sc[i * 3 + 1] = y; P.sc[i * 3 + 2] = z;
   }
 
@@ -464,6 +464,20 @@ export function createBits(G, balls) {
       for (const k of KINDS) {
         const P = pools[k];
         for (let i = 0; i < P.high; i++) if (P.state[i] === LAND && P.owner[i] === O_SKIRT && P.oi[i] === ball.index) freeBit(P, i);
+      }
+    },
+
+    // a ball left its hole: stray bits that were resting on the batter there must not stay floating over the empty hole
+    removeNear(x, z, r) {
+      const r2 = r * r;
+      for (const k of KINDS) {
+        const P = pools[k];
+        const e = P.mesh.instanceMatrix.array;
+        for (let i = 0; i < P.high; i++) {
+          if (P.state[i] !== LAND || P.owner[i] === O_BALL) continue;
+          const dx = e[i * 16 + 12] - x, dz = e[i * 16 + 14] - z;
+          if (dx * dx + dz * dz < r2 && e[i * 16 + 13] > 3) freeBit(P, i);
+        }
       }
     },
 

@@ -99,7 +99,7 @@ export function createHints(G) {
           m.transparent = true;
           ghostMats.push(m);
         }
-        n.renderOrder = 10;
+        n.renderOrder = 999;
       });
       if (!o.parent) G.scene.add(o);
       o.userData.baseScale = o.scale.x || 1;
@@ -187,7 +187,13 @@ export function createHints(G) {
     o.position.copy(disp);
     dirW.copy(FINGER_DIR).applyQuaternion(cam.quaternion);
     o.quaternion.setFromUnitVectors(Y, dirW);
-    o.scale.setScalar(o.userData.baseScale * GHOST_F);
+    // size it like a real fingertip on the glass: ~11 % of the short screen side wide (36..72 css px)
+    const cv = G.renderer.domElement;
+    const cw = cv.clientWidth || 390, ch = cv.clientHeight || 844;
+    const dist = disp.distanceTo(cam.position);
+    const pxPerCm = ch / (2 * Math.tan((cam.fov * Math.PI) / 360) * dist);
+    const wantPx = Math.max(36, Math.min(72, Math.min(cw, ch) * 0.11));
+    o.scale.setScalar((o.userData.baseScale * wantPx) / (pxPerCm * 1.56));
     o.updateMatrixWorld();
   }
 

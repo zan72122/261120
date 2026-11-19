@@ -256,7 +256,7 @@ export function buildProps(ctx) {
     const prof = bowlProfile([[0, 0.3], [2.0, 0.3], [2.12, 0.02], [2.6, 0.02], [2.72, 0.3], [3.5, 1.2], [4.05, 2.5], [4.2, 3.3]], [4.08, 3.36], 0.12, inner);
     const bowl = new THREE.Mesh(lathe(prof, { segs: 64, uvXZ: 0.1, colors: rimColors(prof, 3.25, white, ironRim) }), bowlMatWhite);
     g.add(bowl);
-    const sauceMat = new THREE.MeshPhysicalMaterial({ color: 0x2a1105, roughness: 0.05, clearcoat: 0.3, clearcoatRoughness: 0.02, envMapIntensity: 0.35 });
+    const sauceMat = new THREE.MeshStandardMaterial({ color: 0x3a1707, roughness: 0.32, metalness: 0, envMapIntensity: 0.02 });
     const disc = new THREE.Mesh(new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2), sauceMat);
     g.add(disc);
     const iStart = prof.length - inner.length - 1;
@@ -435,8 +435,9 @@ export function buildProps(ctx) {
     const g = new THREE.Group();
     g.name = 'ghostFinger';
     const fade = fadeAlpha(128, 0.38, 0.85);
-    const skin = new THREE.MeshStandardMaterial({ color: 0xffd6c2, roughness: 0.5, emissive: 0xa86a55, emissiveIntensity: 0.55, transparent: true, opacity: 0.6, depthWrite: false, alphaMap: fade });
-    const nailM = new THREE.MeshStandardMaterial({ color: 0xffeae4, roughness: 0.3, emissive: 0xa07a70, emissiveIntensity: 0.5, transparent: true, opacity: 0.6, depthWrite: false });
+    // mostly self-lit so the hint finger reads the same pale skin tone wherever it hovers (never a dark streak)
+    const skin = new THREE.MeshStandardMaterial({ color: 0x8a6658, roughness: 0.6, emissive: 0xf2c4ad, emissiveIntensity: 0.62, transparent: true, opacity: 0.8, depthWrite: false, depthTest: false, alphaMap: fade, envMapIntensity: 0.2 });
+    const nailM = new THREE.MeshStandardMaterial({ color: 0x8a7068, roughness: 0.35, emissive: 0xffe2d8, emissiveIntensity: 0.7, transparent: true, opacity: 0.8, depthWrite: false, depthTest: false, envMapIntensity: 0.3 });
     const r = 0.78;
     // finger profile: rounded pad, slight narrowing at the joint, fades out toward the top (uv.v ~ height)
     const fprof = [...arc(0, r, r, -Math.PI / 2, 0, 10), [0.8, 1.6], [0.765, 2.6], [0.8, 3.4], [0.84, 4.6], [0.85, 6.4], [0.82, 7.6], [0.5, 8.0], [0, 8.1]];

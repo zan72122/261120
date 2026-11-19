@@ -477,6 +477,7 @@ export function createBall(G, index, S) {
   ball.hold = () => {
     if (ball.mode === 'gone') return;
     if (group.parent !== G.scene) G.scene.attach(group);
+    if (ball.mode === 'hole') S.bits?.removeNear?.(group.position.x, group.position.z, R + 0.25);
     ball.mode = 'held';
     st.fly = null;
     stopSpin();
@@ -495,6 +496,7 @@ export function createBall(G, index, S) {
   ball.flyTo = (worldPos, opts = {}) => {
     if (ball.mode === 'gone') return;
     if (group.parent !== G.scene) G.scene.attach(group);
+    if (ball.mode === 'hole') S.bits?.removeNear?.(group.position.x, group.position.z, R + 0.25);
     stopSpin();
     const from = group.position.clone();
     const to = worldPos.clone();
