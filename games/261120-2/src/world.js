@@ -1398,8 +1398,13 @@ export function buildWorld(engine) {
   function applyQuality() {
     const low = !!(engine.quality && engine.quality.low);
     sun.castShadow = !low;
-    sun.shadow.mapSize.set(low ? 1024 : 2048, low ? 1024 : 2048);
-    if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+    const ms = low ? 1024 : 2048;
+    // 解像度の段階変更のたびに影の地図を作り直さない（大きさが変わる時だけ）
+    if (sun.shadow.mapSize.x !== ms) {
+      sun.shadow.mapSize.set(ms, ms);
+      if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+    }
+    renderer.shadowMap.needsUpdate = true;
   }
   if (quality.onChange) quality.onChange(() => applyQuality());
 
