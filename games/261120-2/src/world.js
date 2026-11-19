@@ -459,7 +459,7 @@ export function buildWorld(engine) {
   root.add(wall);
   // 窓の光だまり
   const winTex = windowLightTexture();
-  const winMat = new THREE.MeshBasicMaterial({ map: winTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, color: 0xffffff, opacity: 1 });
+  const winMat = new THREE.MeshBasicMaterial({ map: winTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, color: 0xfff1d8, opacity: 0.42 });
   const winPatch = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.95), winMat);
   winPatch.position.set(-0.12, 0.56, L.wallZ + 0.002);
   root.add(winPatch);
@@ -806,7 +806,7 @@ export function buildWorld(engine) {
   // ---------------- net
   {
     const N = L.net;
-    const group = new THREE.Group(); group.position.set(N.x, N.y, N.z);
+    const group = new THREE.Group(); group.position.set(N.x, N.y, N.z); group.rotation.y = N.rotY || 0;
     const wireMat = new THREE.MeshStandardMaterial({ color: 0x2f8a46, roughness: 0.38, metalness: 0.05, envMapIntensity: 0.9 });
     const hoop = new THREE.Mesh(new THREE.TorusGeometry(N.hoopR, 0.0017, 8, 72), wireMat);
     hoop.rotation.x = Math.PI / 2;
