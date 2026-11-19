@@ -296,6 +296,7 @@
     var rnd = G.rng(4242), t = 0, bufSize = new THREE.Vector2();
 
     var api = { points: points, count: 0 };
+    var hadAlive = true;
     function take() {
       if (nFree > 0) return free[--nFree];
       // 空きがない: 古い順に上書き
@@ -356,7 +357,10 @@
         aAlpha[k] = a0[k] * G.smooth(0, 0.12, f) * Math.pow(1 - f, 1.4);
         aRot[k] += spin[k] * dt;
       }
-      pa.needsUpdate = sa.needsUpdate = al.needsUpdate = ro.needsUpdate = ce.needsUpdate = true;
+      // 粒が無い間は GPU へ送り直さない（最後の 1 回で全部 alpha 0 を送ってある）
+      if (api.count > 0 || hadAlive) { pa.needsUpdate = sa.needsUpdate = al.needsUpdate = ro.needsUpdate = ce.needsUpdate = true; }
+      hadAlive = api.count > 0;
+      points.visible = hadAlive || api.count > 0;
       var cam = ctx.camera;
       if (ctx.renderer && cam && cam.isPerspectiveCamera) {
         ctx.renderer.getDrawingBufferSize(bufSize);

@@ -729,6 +729,15 @@
     collarMesh.castShadow = true; collarMesh.receiveShadow = true; collarMesh.frustumCulled = false;
     group.add(collarMesh);
 
+    // 影マップの使い回し用: 頂点シェーダで形を決める値（core.js の影キャッシュが見る）
+    var SIG_V = ['uShape', 'uHeap', 'uLift', 'uHung', 'uMisc'], SIG_F = ['uShapeBR', 'uBulge', 'uStA', 'uStB', 'uMix', 'uStagger', 'uSwing2', 'uWAmp'];
+    function shadowSig(a) {
+      for (var i = 0; i < SIG_V.length; i++) { var v = U[SIG_V[i]].value; a.push(v.x, v.y, v.z, v.w); }
+      for (i = 0; i < SIG_F.length; i++) a.push(U[SIG_F[i]].value);
+      a.push(wrkTex.version, maskTex.version, colorTex.version, det.tex.version);
+    }
+    mesh.userData.shadowSig = shadowSig; collarMesh.userData.shadowSig = shadowSig;
+
     // 山の芯（すき間から見える内側の布）
     var coreGeo = new THREE.SphereGeometry(1, 28, 16);
     (function () {

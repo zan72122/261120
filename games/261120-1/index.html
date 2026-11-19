@@ -536,6 +536,57 @@ window.G=window.G||{};G.FALLBACK_IMG="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQA
   };
 
   // ======================================================================
+  // 影マップの使い回し
+  //   影を落とす物が（そのライトの影の範囲で）動いた時だけ、そのライトの影マップを描き直す。
+  //   頂点シェーダで形が変わる物は mesh.userData.shadowSig(arr) で形を決める値を arr に積む。
+  // ======================================================================
+  function makeShadowCache(scene) {
+    var casters = [], lights = [], force = true;
+    var mats = [];
+    function collect(o) {
+      if (o.isLight) { if (o.castShadow && o.shadow) lights.push(o); return; }
+      if (o.castShadow && (o.isMesh || o.isLine || o.isPoints)) casters.push(o);
+    }
+    function sigOf(light, out) {
+      var fr = light.shadow.getFrustum(), n = 0;
+      for (var i = 0; i < casters.length; i++) {
+        var c = casters[i];
+        if (c.frustumCulled && !fr.intersectsObject(c)) continue;
+        var e = c.matrixWorld.elements, g = c.geometry, pa = g && g.attributes ? g.attributes.position : null;
+        out[n++] = c.id;
+        for (var k = 0; k < 16; k++) out[n++] = e[k];
+        out[n++] = g ? g.id : 0; out[n++] = pa ? pa.version : 0;
+        var m = c.material;
+        out[n++] = Array.isArray(m) ? m.length : (m && m.visible ? 1 : 0);
+        if (c.userData.shadowSig) { mats.length = 0; c.userData.shadowSig(mats); for (var j = 0; j < mats.length; j++) out[n++] = mats[j]; }
+      }
+      out.length = n;
+    }
+    return {
+      invalidate: function () { force = true; },
+      // renderer.render の直前に呼ぶ
+      update: function () {
+        casters.length = 0; lights.length = 0;
+        scene.updateMatrixWorld();
+        scene.traverseVisible(collect);
+        for (var i = 0; i < lights.length; i++) {
+          var L = lights[i], sh = L.shadow, ud = L.userData;
+          sh.autoUpdate = false;
+          if (L.target) L.target.updateMatrixWorld();
+          sh.updateMatrices(L);
+          var cur = ud._shSigB || (ud._shSigB = []), prev = ud._shSig || [];
+          sigOf(L, cur);
+          var same = !force && prev.length === cur.length;
+          if (same) for (var k = 0; k < cur.length; k++) if (cur[k] !== prev[k]) { same = false; break; }
+          if (!same) sh.needsUpdate = true;
+          ud._shSig = cur; ud._shSigB = prev;
+        }
+        force = false;
+      }
+    };
+  }
+
+  // ======================================================================
   // 起動
   // ======================================================================
   function showFallback(canvas) {
@@ -578,7 +629,13 @@ window.G=window.G||{};G.FALLBACK_IMG="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQA
       time: 0, paused: false
     };
 
-    var basePR = Math.min(window.devicePixelRatio || 1, 2), pr = basePR, MIN_PR = 0.7;
+    // 描画の解像度: 端末の倍率（最大 2）と、画素数の上限（iPad の大画面で塗りが重くなりすぎない）の小さい方。
+    var MAX_PX = 2.6e6, MIN_PR = 0.7;
+    function prCap() {
+      var w = window.innerWidth || 1, h = window.innerHeight || 1;
+      return Math.max(MIN_PR, Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(MAX_PX / (w * h))));
+    }
+    var basePR = prCap(), pr = basePR;
     try {
       renderer.setPixelRatio(pr);
       renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -609,6 +666,12 @@ window.G=window.G||{};G.FALLBACK_IMG="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQA
       readSafe(probe, app.safe);
       if (!force && w === app.size.w && h === app.size.h) return;
       app.size.w = w; app.size.h = h; app.size.aspect = w / h;
+      var cap = prCap();
+      if (Math.abs(cap - basePR) > 1e-3) {
+        basePR = cap; pr = Math.min(pr, basePR);
+        if (!perf || !perf.down) pr = basePR;
+        try { renderer.setPixelRatio(pr); } catch (e) { report('setPixelRatio', e); }
+      }
       renderer.setSize(w, h, false);
       camera.aspect = w / h; camera.updateProjectionMatrix();
       G.cam.update(0);
@@ -713,7 +776,15 @@ window.G=window.G||{};G.FALLBACK_IMG="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQA
 
     // ---------------- ループ ----------------
     var rafId = 0, last = 0, running = false, ctxLost = false;
-    var perf = { avg: 16.7, slow: 0, fast: 0, stuck: 0, warm: 0, lowCalled: false };
+    var shadows = app.shadows = makeShadowCache(scene);
+    // 隠れている物（パパなど）のシェーダも最初に作っておき、登場の瞬間に止まらないようにする
+    try { renderer.compile(scene, camera); } catch (e) { report('compile', e); }
+    // 速度に応じた解像度の調整。
+    //  - 48fps を切る状態が続いたら解像度を 1 段下げ、2 秒後に効いたかを確かめる。
+    //    効かない（30fps 固定の省電力モードや CPU 側が重い）なら元に戻し、しばらく下げない。
+    //  - 余裕が続いたら 1 段戻す。上げ下げを繰り返さないよう、戻す待ち時間は毎回のびる。
+    var SLOW_MS = 21, FAST_MS = 18;
+    var perf = { avg: 16.7, slow: 0, fast: 0, stuck: 0, warm: 0, lowCalled: false, down: 0, upWait: 4, trial: null, floor: 0, floorT: 0, floorWait: 30 };
     function setPR(v) {
       v = G.clamp(v, MIN_PR, basePR);
       if (Math.abs(v - pr) < 1e-3) return;
@@ -724,23 +795,42 @@ window.G=window.G||{};G.FALLBACK_IMG="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQA
       if (perf.warm < 1.0) { perf.warm += dt; return; }
       if (rawMs > 250) return; // ひっかかり（タブ切替など）は数えない
       perf.avg += (rawMs - perf.avg) * 0.1;
-      if (perf.avg > 40) {
+      if (perf.floor > 0) { perf.floorT += dt; if (perf.floorT > perf.floorWait) { perf.floor = 0; perf.floorWait = Math.min(240, perf.floorWait * 2); } }
+      var tr = perf.trial;
+      if (tr) {
+        tr.t += dt;
+        if (tr.t < 2) return;
+        perf.trial = null;
+        if (perf.avg > tr.avg * 0.9) { // 下げても速くならない → 戻す
+          setPR(tr.pr); perf.floor = tr.pr; perf.floorT = 0; perf.down = Math.max(0, perf.down - 1);
+        }
+        perf.slow = perf.fast = 0;
+        return;
+      }
+      if (perf.avg > SLOW_MS) {
         perf.slow += dt; perf.fast = 0;
-        if (pr > MIN_PR + 1e-3) {
+        var canDown = pr > MIN_PR + 1e-3 && (perf.floor === 0 || pr * 0.85 >= perf.floor - 1e-3);
+        if (canDown) {
           perf.stuck = 0;
-          if (perf.slow > 2) { setPR(pr * 0.85); perf.slow = 0; perf.avg = 30; }
-        } else {
+          if (perf.slow > 1.5) {
+            perf.trial = { pr: pr, avg: perf.avg, t: 0 };
+            setPR(pr * 0.85); perf.down++; perf.slow = 0;
+          }
+        } else if (pr <= MIN_PR + 1e-3) {
           perf.stuck += dt;
-          if (perf.stuck > 5 && !perf.lowCalled) {
+          if (perf.stuck > 5 && !perf.lowCalled && perf.avg > 40) {
             perf.lowCalled = true; app.lowPower = true; ctx.lowPower = true;
             callFlow('onLowPower');
           }
         }
       } else {
         perf.slow = 0; perf.stuck = 0;
-        if (perf.avg < 22) {
+        if (perf.avg < FAST_MS && pr < basePR - 1e-3) {
           perf.fast += dt;
-          if (perf.fast > 4 && pr < basePR - 1e-3) { setPR(pr / 0.85); perf.fast = 0; }
+          if (perf.fast > perf.upWait) {
+            setPR(pr / 0.85); perf.fast = 0; perf.down = Math.max(0, perf.down - 1);
+            perf.upWait = Math.min(60, perf.upWait * 2);
+          }
         } else perf.fast = 0;
       }
     }
@@ -754,6 +844,7 @@ window.G=window.G||{};G.FALLBACK_IMG="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQA
       app.time += dt;
       try { G.cam.update(dt); } catch (e) { report('cam.update', e); }
       callFlow('update', dt, app.time);
+      try { shadows.update(); } catch (e) { report('shadows', e); shadows.invalidate(); scene.traverse(function (o) { if (o.isLight && o.shadow) o.shadow.autoUpdate = true; }); }
       try { renderer.render(scene, camera); } catch (e) { report('render', e); }
       perfStep(raw, dt);
     }
@@ -792,7 +883,7 @@ window.G=window.G||{};G.FALLBACK_IMG="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQA
       if (!app.paused) { app.paused = true; callFlow('onPause'); }
     }, false);
     canvas.addEventListener('webglcontextrestored', function () {
-      ctxLost = false;
+      ctxLost = false; shadows.invalidate();
       if (!document.hidden) { app.paused = false; callFlow('onResume'); start(); }
     }, false);
 
@@ -2089,6 +2180,15 @@ window.G=window.G||{};G.FALLBACK_IMG="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQA
     collarMesh.castShadow = true; collarMesh.receiveShadow = true; collarMesh.frustumCulled = false;
     group.add(collarMesh);
 
+    // 影マップの使い回し用: 頂点シェーダで形を決める値（core.js の影キャッシュが見る）
+    var SIG_V = ['uShape', 'uHeap', 'uLift', 'uHung', 'uMisc'], SIG_F = ['uShapeBR', 'uBulge', 'uStA', 'uStB', 'uMix', 'uStagger', 'uSwing2', 'uWAmp'];
+    function shadowSig(a) {
+      for (var i = 0; i < SIG_V.length; i++) { var v = U[SIG_V[i]].value; a.push(v.x, v.y, v.z, v.w); }
+      for (i = 0; i < SIG_F.length; i++) a.push(U[SIG_F[i]].value);
+      a.push(wrkTex.version, maskTex.version, colorTex.version, det.tex.version);
+    }
+    mesh.userData.shadowSig = shadowSig; collarMesh.userData.shadowSig = shadowSig;
+
     // 山の芯（すき間から見える内側の布）
     var coreGeo = new THREE.SphereGeometry(1, 28, 16);
     (function () {
@@ -2853,6 +2953,7 @@ window.G=window.G||{};G.FALLBACK_IMG="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQA
     var rnd = G.rng(4242), t = 0, bufSize = new THREE.Vector2();
 
     var api = { points: points, count: 0 };
+    var hadAlive = true;
     function take() {
       if (nFree > 0) return free[--nFree];
       // 空きがない: 古い順に上書き
@@ -2913,7 +3014,10 @@ window.G=window.G||{};G.FALLBACK_IMG="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQA
         aAlpha[k] = a0[k] * G.smooth(0, 0.12, f) * Math.pow(1 - f, 1.4);
         aRot[k] += spin[k] * dt;
       }
-      pa.needsUpdate = sa.needsUpdate = al.needsUpdate = ro.needsUpdate = ce.needsUpdate = true;
+      // 粒が無い間は GPU へ送り直さない（最後の 1 回で全部 alpha 0 を送ってある）
+      if (api.count > 0 || hadAlive) { pa.needsUpdate = sa.needsUpdate = al.needsUpdate = ro.needsUpdate = ce.needsUpdate = true; }
+      hadAlive = api.count > 0;
+      points.visible = hadAlive || api.count > 0;
       var cam = ctx.camera;
       if (ctx.renderer && cam && cam.isPerspectiveCamera) {
         ctx.renderer.getDrawingBufferSize(bufSize);
@@ -3996,6 +4100,14 @@ window.G=window.G||{};G.FALLBACK_IMG="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQA
       var th = TORSO.thAtX(x, y); TORSO.point(y, th, outP); TORSO.normal(y, th, outN);
       outP.addScaledVector(outN, pkOffset(x, y, bulge, gap, peek, wig) + extra);
     }
+    // 頂点数が同じなら GPU のバッファを作り直さず中身だけ差し替える（ポケットが動くたびの確保・破棄を避ける）
+    function swapStrip(mesh, ng) {
+      var og = mesh.geometry, oa = og.attributes;
+      if (oa.position && oa.position.count === ng.attributes.position.count && og.index && og.index.count === ng.index.count) {
+        ['position', 'uv', 'normal'].forEach(function (k) { oa[k].copyArray(ng.attributes[k].array); oa[k].needsUpdate = true; });
+        og.boundingSphere = ng.boundingSphere;
+      } else { og.dispose(); mesh.geometry = ng; }
+    }
     function rebuildPocket(bulge, gap, peek, wig) {
       for (var k = 0; k < pkXY.length; k++) {
         var o = pkOffset(pkXY[k][0], pkXY[k][1], bulge, gap, peek, wig), b = pkBase[k], n = pkNor[k];
@@ -4009,10 +4121,10 @@ window.G=window.G||{};G.FALLBACK_IMG="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQA
       for (i2 = 0; i2 <= L; i2++) { y = G.lerp(PK.yt - 0.002, pkBottom(PK.x0 + ins) + ins, i2 / L); P.push(new THREE.Vector3()); Nn.push(new THREE.Vector3()); surfPt(PK.x0 + ins, y, bulge, gap, peek, wig, 0.0004, P[P.length - 1], Nn[Nn.length - 1]); }
       for (i2 = 1; i2 <= L; i2++) { x = G.lerp(PK.x0 + ins, PK.x1 - ins, i2 / L); y = pkBottom(x) + ins; P.push(new THREE.Vector3()); Nn.push(new THREE.Vector3()); surfPt(x, y, bulge, gap, peek, wig, 0.0004, P[P.length - 1], Nn[Nn.length - 1]); }
       for (i2 = 1; i2 <= L; i2++) { y = G.lerp(pkBottom(PK.x1 - ins) + ins, PK.yt - 0.002, i2 / L); P.push(new THREE.Vector3()); Nn.push(new THREE.Vector3()); surfPt(PK.x1 - ins, y, bulge, gap, peek, wig, 0.0004, P[P.length - 1], Nn[Nn.length - 1]); }
-      pkStitch.geometry.dispose(); pkStitch.geometry = stitchStrip(P, Nn, 0.0011, 0.0032);
+      swapStrip(pkStitch, stitchStrip(P, Nn, 0.0011, 0.0032));
       var P2 = [], N2 = [];
       for (i2 = 0; i2 <= L; i2++) { x = G.lerp(PK.x0 + 0.002, PK.x1 - 0.002, i2 / L); P2.push(new THREE.Vector3()); N2.push(new THREE.Vector3()); surfPt(x, PK.yt - 0.0145, bulge, gap, peek, wig, 0.0004, P2[i2], N2[i2]); }
-      pkHem.geometry.dispose(); pkHem.geometry = stitchStrip(P2, N2, 0.0011, 0.0032);
+      swapStrip(pkHem, stitchStrip(P2, N2, 0.0011, 0.0032));
       // 巻き順の確認（初回）
       if (!rebuildPocket.checked) {
         rebuildPocket.checked = true;

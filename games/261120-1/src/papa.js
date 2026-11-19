@@ -623,6 +623,14 @@
       var th = TORSO.thAtX(x, y); TORSO.point(y, th, outP); TORSO.normal(y, th, outN);
       outP.addScaledVector(outN, pkOffset(x, y, bulge, gap, peek, wig) + extra);
     }
+    // 頂点数が同じなら GPU のバッファを作り直さず中身だけ差し替える（ポケットが動くたびの確保・破棄を避ける）
+    function swapStrip(mesh, ng) {
+      var og = mesh.geometry, oa = og.attributes;
+      if (oa.position && oa.position.count === ng.attributes.position.count && og.index && og.index.count === ng.index.count) {
+        ['position', 'uv', 'normal'].forEach(function (k) { oa[k].copyArray(ng.attributes[k].array); oa[k].needsUpdate = true; });
+        og.boundingSphere = ng.boundingSphere;
+      } else { og.dispose(); mesh.geometry = ng; }
+    }
     function rebuildPocket(bulge, gap, peek, wig) {
       for (var k = 0; k < pkXY.length; k++) {
         var o = pkOffset(pkXY[k][0], pkXY[k][1], bulge, gap, peek, wig), b = pkBase[k], n = pkNor[k];
@@ -636,10 +644,10 @@
       for (i2 = 0; i2 <= L; i2++) { y = G.lerp(PK.yt - 0.002, pkBottom(PK.x0 + ins) + ins, i2 / L); P.push(new THREE.Vector3()); Nn.push(new THREE.Vector3()); surfPt(PK.x0 + ins, y, bulge, gap, peek, wig, 0.0004, P[P.length - 1], Nn[Nn.length - 1]); }
       for (i2 = 1; i2 <= L; i2++) { x = G.lerp(PK.x0 + ins, PK.x1 - ins, i2 / L); y = pkBottom(x) + ins; P.push(new THREE.Vector3()); Nn.push(new THREE.Vector3()); surfPt(x, y, bulge, gap, peek, wig, 0.0004, P[P.length - 1], Nn[Nn.length - 1]); }
       for (i2 = 1; i2 <= L; i2++) { y = G.lerp(pkBottom(PK.x1 - ins) + ins, PK.yt - 0.002, i2 / L); P.push(new THREE.Vector3()); Nn.push(new THREE.Vector3()); surfPt(PK.x1 - ins, y, bulge, gap, peek, wig, 0.0004, P[P.length - 1], Nn[Nn.length - 1]); }
-      pkStitch.geometry.dispose(); pkStitch.geometry = stitchStrip(P, Nn, 0.0011, 0.0032);
+      swapStrip(pkStitch, stitchStrip(P, Nn, 0.0011, 0.0032));
       var P2 = [], N2 = [];
       for (i2 = 0; i2 <= L; i2++) { x = G.lerp(PK.x0 + 0.002, PK.x1 - 0.002, i2 / L); P2.push(new THREE.Vector3()); N2.push(new THREE.Vector3()); surfPt(x, PK.yt - 0.0145, bulge, gap, peek, wig, 0.0004, P2[i2], N2[i2]); }
-      pkHem.geometry.dispose(); pkHem.geometry = stitchStrip(P2, N2, 0.0011, 0.0032);
+      swapStrip(pkHem, stitchStrip(P2, N2, 0.0011, 0.0032));
       // 巻き順の確認（初回）
       if (!rebuildPocket.checked) {
         rebuildPocket.checked = true;

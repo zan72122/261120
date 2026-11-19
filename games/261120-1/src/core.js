@@ -388,6 +388,57 @@
   };
 
   // ======================================================================
+  // 影マップの使い回し
+  //   影を落とす物が（そのライトの影の範囲で）動いた時だけ、そのライトの影マップを描き直す。
+  //   頂点シェーダで形が変わる物は mesh.userData.shadowSig(arr) で形を決める値を arr に積む。
+  // ======================================================================
+  function makeShadowCache(scene) {
+    var casters = [], lights = [], force = true;
+    var mats = [];
+    function collect(o) {
+      if (o.isLight) { if (o.castShadow && o.shadow) lights.push(o); return; }
+      if (o.castShadow && (o.isMesh || o.isLine || o.isPoints)) casters.push(o);
+    }
+    function sigOf(light, out) {
+      var fr = light.shadow.getFrustum(), n = 0;
+      for (var i = 0; i < casters.length; i++) {
+        var c = casters[i];
+        if (c.frustumCulled && !fr.intersectsObject(c)) continue;
+        var e = c.matrixWorld.elements, g = c.geometry, pa = g && g.attributes ? g.attributes.position : null;
+        out[n++] = c.id;
+        for (var k = 0; k < 16; k++) out[n++] = e[k];
+        out[n++] = g ? g.id : 0; out[n++] = pa ? pa.version : 0;
+        var m = c.material;
+        out[n++] = Array.isArray(m) ? m.length : (m && m.visible ? 1 : 0);
+        if (c.userData.shadowSig) { mats.length = 0; c.userData.shadowSig(mats); for (var j = 0; j < mats.length; j++) out[n++] = mats[j]; }
+      }
+      out.length = n;
+    }
+    return {
+      invalidate: function () { force = true; },
+      // renderer.render の直前に呼ぶ
+      update: function () {
+        casters.length = 0; lights.length = 0;
+        scene.updateMatrixWorld();
+        scene.traverseVisible(collect);
+        for (var i = 0; i < lights.length; i++) {
+          var L = lights[i], sh = L.shadow, ud = L.userData;
+          sh.autoUpdate = false;
+          if (L.target) L.target.updateMatrixWorld();
+          sh.updateMatrices(L);
+          var cur = ud._shSigB || (ud._shSigB = []), prev = ud._shSig || [];
+          sigOf(L, cur);
+          var same = !force && prev.length === cur.length;
+          if (same) for (var k = 0; k < cur.length; k++) if (cur[k] !== prev[k]) { same = false; break; }
+          if (!same) sh.needsUpdate = true;
+          ud._shSig = cur; ud._shSigB = prev;
+        }
+        force = false;
+      }
+    };
+  }
+
+  // ======================================================================
   // 起動
   // ======================================================================
   function showFallback(canvas) {
@@ -430,7 +481,13 @@
       time: 0, paused: false
     };
 
-    var basePR = Math.min(window.devicePixelRatio || 1, 2), pr = basePR, MIN_PR = 0.7;
+    // 描画の解像度: 端末の倍率（最大 2）と、画素数の上限（iPad の大画面で塗りが重くなりすぎない）の小さい方。
+    var MAX_PX = 2.6e6, MIN_PR = 0.7;
+    function prCap() {
+      var w = window.innerWidth || 1, h = window.innerHeight || 1;
+      return Math.max(MIN_PR, Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(MAX_PX / (w * h))));
+    }
+    var basePR = prCap(), pr = basePR;
     try {
       renderer.setPixelRatio(pr);
       renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -461,6 +518,12 @@
       readSafe(probe, app.safe);
       if (!force && w === app.size.w && h === app.size.h) return;
       app.size.w = w; app.size.h = h; app.size.aspect = w / h;
+      var cap = prCap();
+      if (Math.abs(cap - basePR) > 1e-3) {
+        basePR = cap; pr = Math.min(pr, basePR);
+        if (!perf || !perf.down) pr = basePR;
+        try { renderer.setPixelRatio(pr); } catch (e) { report('setPixelRatio', e); }
+      }
       renderer.setSize(w, h, false);
       camera.aspect = w / h; camera.updateProjectionMatrix();
       G.cam.update(0);
@@ -565,7 +628,15 @@
 
     // ---------------- ループ ----------------
     var rafId = 0, last = 0, running = false, ctxLost = false;
-    var perf = { avg: 16.7, slow: 0, fast: 0, stuck: 0, warm: 0, lowCalled: false };
+    var shadows = app.shadows = makeShadowCache(scene);
+    // 隠れている物（パパなど）のシェーダも最初に作っておき、登場の瞬間に止まらないようにする
+    try { renderer.compile(scene, camera); } catch (e) { report('compile', e); }
+    // 速度に応じた解像度の調整。
+    //  - 48fps を切る状態が続いたら解像度を 1 段下げ、2 秒後に効いたかを確かめる。
+    //    効かない（30fps 固定の省電力モードや CPU 側が重い）なら元に戻し、しばらく下げない。
+    //  - 余裕が続いたら 1 段戻す。上げ下げを繰り返さないよう、戻す待ち時間は毎回のびる。
+    var SLOW_MS = 21, FAST_MS = 18;
+    var perf = { avg: 16.7, slow: 0, fast: 0, stuck: 0, warm: 0, lowCalled: false, down: 0, upWait: 4, trial: null, floor: 0, floorT: 0, floorWait: 30 };
     function setPR(v) {
       v = G.clamp(v, MIN_PR, basePR);
       if (Math.abs(v - pr) < 1e-3) return;
@@ -576,23 +647,42 @@
       if (perf.warm < 1.0) { perf.warm += dt; return; }
       if (rawMs > 250) return; // ひっかかり（タブ切替など）は数えない
       perf.avg += (rawMs - perf.avg) * 0.1;
-      if (perf.avg > 40) {
+      if (perf.floor > 0) { perf.floorT += dt; if (perf.floorT > perf.floorWait) { perf.floor = 0; perf.floorWait = Math.min(240, perf.floorWait * 2); } }
+      var tr = perf.trial;
+      if (tr) {
+        tr.t += dt;
+        if (tr.t < 2) return;
+        perf.trial = null;
+        if (perf.avg > tr.avg * 0.9) { // 下げても速くならない → 戻す
+          setPR(tr.pr); perf.floor = tr.pr; perf.floorT = 0; perf.down = Math.max(0, perf.down - 1);
+        }
+        perf.slow = perf.fast = 0;
+        return;
+      }
+      if (perf.avg > SLOW_MS) {
         perf.slow += dt; perf.fast = 0;
-        if (pr > MIN_PR + 1e-3) {
+        var canDown = pr > MIN_PR + 1e-3 && (perf.floor === 0 || pr * 0.85 >= perf.floor - 1e-3);
+        if (canDown) {
           perf.stuck = 0;
-          if (perf.slow > 2) { setPR(pr * 0.85); perf.slow = 0; perf.avg = 30; }
-        } else {
+          if (perf.slow > 1.5) {
+            perf.trial = { pr: pr, avg: perf.avg, t: 0 };
+            setPR(pr * 0.85); perf.down++; perf.slow = 0;
+          }
+        } else if (pr <= MIN_PR + 1e-3) {
           perf.stuck += dt;
-          if (perf.stuck > 5 && !perf.lowCalled) {
+          if (perf.stuck > 5 && !perf.lowCalled && perf.avg > 40) {
             perf.lowCalled = true; app.lowPower = true; ctx.lowPower = true;
             callFlow('onLowPower');
           }
         }
       } else {
         perf.slow = 0; perf.stuck = 0;
-        if (perf.avg < 22) {
+        if (perf.avg < FAST_MS && pr < basePR - 1e-3) {
           perf.fast += dt;
-          if (perf.fast > 4 && pr < basePR - 1e-3) { setPR(pr / 0.85); perf.fast = 0; }
+          if (perf.fast > perf.upWait) {
+            setPR(pr / 0.85); perf.fast = 0; perf.down = Math.max(0, perf.down - 1);
+            perf.upWait = Math.min(60, perf.upWait * 2);
+          }
         } else perf.fast = 0;
       }
     }
@@ -606,6 +696,7 @@
       app.time += dt;
       try { G.cam.update(dt); } catch (e) { report('cam.update', e); }
       callFlow('update', dt, app.time);
+      try { shadows.update(); } catch (e) { report('shadows', e); shadows.invalidate(); scene.traverse(function (o) { if (o.isLight && o.shadow) o.shadow.autoUpdate = true; }); }
       try { renderer.render(scene, camera); } catch (e) { report('render', e); }
       perfStep(raw, dt);
     }
@@ -644,7 +735,7 @@
       if (!app.paused) { app.paused = true; callFlow('onPause'); }
     }, false);
     canvas.addEventListener('webglcontextrestored', function () {
-      ctxLost = false;
+      ctxLost = false; shadows.invalidate();
       if (!document.hidden) { app.paused = false; callFlow('onResume'); start(); }
     }, false);
 
