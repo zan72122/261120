@@ -256,7 +256,7 @@ export function buildProps(ctx) {
     const prof = bowlProfile([[0, 0.3], [2.0, 0.3], [2.12, 0.02], [2.6, 0.02], [2.72, 0.3], [3.5, 1.2], [4.05, 2.5], [4.2, 3.3]], [4.08, 3.36], 0.12, inner);
     const bowl = new THREE.Mesh(lathe(prof, { segs: 64, uvXZ: 0.1, colors: rimColors(prof, 3.25, white, ironRim) }), bowlMatWhite);
     g.add(bowl);
-    const sauceMat = new THREE.MeshPhysicalMaterial({ color: 0x1c0a03, roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.06, envMapIntensity: 0.7 });
+    const sauceMat = new THREE.MeshPhysicalMaterial({ color: 0x2a1105, roughness: 0.1, clearcoat: 0.6, clearcoatRoughness: 0.03, envMapIntensity: 0.35 });
     const disc = new THREE.Mesh(new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2), sauceMat);
     g.add(disc);
     const iStart = prof.length - inner.length - 1;

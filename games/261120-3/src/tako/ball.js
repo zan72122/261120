@@ -10,6 +10,9 @@ const R = BALL_R;
 const L_FULL = 0.12; // liquid level above the centre when the hole is full (meniscus)
 const COOK_BASE = 0.5 / 7; // cook/s at the bottom of the hole
 const SOAK = 0.012; // all-over heat soak after the first flip
+const SOAK2 = 0.2; // after the second flip the ball cooks through quickly (done ≈ 2–3 s later)
+const FLIP_RATE = 2.8; // bottom cooks faster once turned (hole and ball are hot): next 'ready' ≈ 3 s after a flip
+const PRECOOK = 0.545; // precook(): deep bottom set to just under READY_MEAN (invisible: it is under the batter)
 const READY_MEAN = 0.56;
 const DONE_FRAC = 0.96;
 const DONE_COOK = 0.55;
@@ -120,6 +123,7 @@ export function createBall(G, index, S) {
     filling: null,
     fillingObj: null,
     cookCap: 1,
+    cookRate: 1, // phase-controlled multiplier (assist)
     ready: false,
     flips: 0,
     spinning: false,
@@ -295,9 +299,9 @@ export function createBall(G, index, S) {
             const d = Math.min(1, -vy / R);
             rate = COOK_BASE * (0.06 + 0.94 * Math.pow(d, 1.3));
           } else rate = COOK_BASE * 0.06 * (1 - vy / 0.25);
-          rate *= rateVar[i] * (ball.flips >= 1 ? 1.4 : 1);
+          rate *= rateVar[i] * (ball.flips >= 1 ? FLIP_RATE : 1) * ball.cookRate;
         }
-        if (ball.flips >= 1) rate += SOAK * (0.7 + 0.6 * rateVar[i]);
+        if (ball.flips >= 1) rate += (ball.flips >= 2 && !ball.done ? SOAK2 : SOAK) * (0.7 + 0.6 * rateVar[i]);
         if (c > 0.6) rate *= 1 - 0.88 * smoothstep(0.6, 0.95, c);
         if (st.evenT > 0) rate = Math.max(rate, c < 0.62 ? 0.9 : 0);
         // a phase-imposed cap (<1) holds shallow parts back more than the deep bottom
@@ -449,6 +453,25 @@ export function createBall(G, index, S) {
     st.readinessV = Math.min(st.readinessV, 0.99);
     st.cookAcc = 1; // re-evaluate readiness soon
     return hop ? 'hop' : 'flip';
+  };
+
+  // raise the deep bottom (current orientation) to just under 'ready' so flipping can start right away
+  ball.precook = (k = PRECOOK) => {
+    if (ball.flips > 0 || ball.done) return;
+    const b = S.base;
+    for (let i = 0; i < N; i++) {
+      const d = -rotY(q, b[i * 3], b[i * 3 + 1], b[i * 3 + 2]);
+      if (d > 0.3) cook[i] = Math.max(cook[i], k * smoothstep(0.3, 0.7, d) * (0.94 + 0.12 * (rateVar[i] - 1)));
+    }
+    st.cookAcc = 1;
+    st.colorDirty = true;
+  };
+
+  // small hop in place (e.g. a 'done' cheer); lands with 'land'
+  ball.pop = (h = 0.6) => {
+    if (ball.mode === 'gone' || st.airborne) return;
+    st.hopV = Math.sqrt(2 * G_HOP * Math.max(0.05, h));
+    st.airborne = true;
   };
 
   ball.hold = () => {
@@ -666,6 +689,7 @@ export function createBall(G, index, S) {
     ball.fill = 0;
     ball.skirt = 0;
     ball.cookCap = 1;
+    ball.cookRate = 1;
     ball.ready = false;
     ball.flips = 0;
     ball.spinning = false;
