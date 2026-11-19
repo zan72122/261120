@@ -1,5 +1,5 @@
 /* 開発用プレビュー台（本番には入らない）。
-   build.mjs --mods common,<mod> --extra tools/rig.js --extra <自分のharness.js> で使う。
+   build.mjs --mods common,<mod> --extra tools/rig.js --extra <自分のharness.js> で使う（papa を見る時は acorn も入れる: --mods common,acorn,papa）。
    harness 側は window.HARNESS = function(ctx){ ...; return { update(dt,t){} }; } を定義する。
    ctx = { THREE, renderer, scene, camera, lights, lowPower:false, aniso, envMap, floor }
    URL: ?cam=portrait|papa|close  （harness 内で camera を自由に動かしてもよい） */
