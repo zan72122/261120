@@ -57,7 +57,11 @@
 //   onChange を呼ぶ。low から戻しはしない。particleBudget は通常 800、low で 400（粒子の目安上限数）。
 //   目標はなめらかな 60fps。解像度を下げても速くならない（30fps 上限の省電力モード等）ときはそれ以上下げない。
 //   影の地図は 60fps 付近では 2 フレームに 1 回だけ描き直す（renderer.shadowMap.autoUpdate=false で engine が管理）。
-//   最初の数フレームで、見えていない物も含めてシェーダを先に用意しておく（遊んでいる途中の初回表示でつかえない）。
+//   最初の絵は「見えている物」だけで出す（engine.precompile() で先に GPU へ compile を投げておける）。
+//   見えていない物（後で出る道具・粒子・指のお手本）のシェーダとテクスチャ転送は、最初の絵のあと
+//   遊んでいる間に 1 フレーム数個ずつ裏で用意する（途中の初回表示でつかえない・起動時に固まらない）。
+// engine.precompile()   今 visible な物のシェーダを先に compile（GL の処理は GPU 側で並行して進む）
+// engine.prepLater(fn)  最初の絵のあと、裏で 1 フレームに 1 つ実行する軽い準備の予約
 //   world 担当: low 後に足すライトは castShadow を付けないこと（engine.quality.low を見る）。
 //
 // 保存（localStorage キー 'gf-261120-2'。例外・拒否・壊れた JSON でも落ちない）
@@ -472,18 +476,72 @@ export function createEngine({ canvas, fallbackEl }) {
     }
   }
 
-  // ---------- shader warm-up ----------
-  // 見えていない物（後で出てくる道具・粒子・お手本の手）も一度 visible にして compile し、途中の初回表示のつかえをなくす。
-  function warmUp() {
-    const hidden = [];
-    scene.traverse((o) => { if (!o.visible) { hidden.push(o); o.visible = true; } });
-    try { renderer.compile(scene, camera); } catch (e) { /* ignore */ }
-    for (const o of hidden) o.visible = false;
+  // ---------- 先に用意（最初の絵）/ 裏で用意（残り） ----------
+  // GL の compile / link は GPU 側で進むので、先に「作って」おけば、その間にメインスレッドは別の物を作れる。
+  // precompile(): 今見えている物（visible の木）だけを compile する。隠れている物は後で裏で用意する。
+  function renderables(root, visibleOnly) {
+    const out = [];
+    const walk = (o) => {
+      if (visibleOnly && !o.visible) return;
+      if ((o.isMesh || o.isPoints || o.isLine || o.isSprite) && o.material) out.push(o);
+      for (const c of o.children) walk(c);
+    };
+    walk(root);
+    return out;
+  }
+  function mats(o) { return Array.isArray(o.material) ? o.material : [o.material]; }
+  function needsProgram(o) {
+    for (const m of mats(o)) { if (m && !renderer.properties.get(m).currentProgram) return true; }
+    return false;
+  }
+  function compileObj(o) {
+    try { renderer.compile(o, camera, scene); } catch (e) { /* ignore */ }
+  }
+  engine.precompile = () => {
+    for (const o of renderables(scene, true)) if (needsProgram(o)) compileObj(o);
+  };
+
+  // 裏の準備: 最初の絵が出たあと、遊んでいる間に少しずつ
+  //   1) 予約された仕事（指のお手本の絵など）
+  //   2) まだシェーダのない物（後で出てくる道具・粒子・お手本の手）を 1 フレームに 2 個まで compile（遅い画面では 1 個）
+  //   3) まだ GPU に送っていないテクスチャを 1 フレームに 1 枚
+  //   全部終わったら何もしない。
+  const prepJobs = [];
+  engine.prepLater = (fn) => { prepJobs.push(fn); };
+  let bgObjs = null, bgTex = null, bgDone = false;
+  const TEX_KEYS = ['map', 'bumpMap', 'normalMap', 'roughnessMap', 'metalnessMap', 'alphaMap', 'emissiveMap', 'aoMap', 'clearcoatMap', 'clearcoatNormalMap', 'clearcoatRoughnessMap', 'displacementMap', 'specularMap', 'lightMap', 'transmissionMap', 'thicknessMap', 'sheenColorMap', 'sheenRoughnessMap'];
+  function collectTextures() {
+    const set = new Set();
+    for (const o of renderables(scene, false)) {
+      for (const m of mats(o)) {
+        if (!m) continue;
+        for (const k of TEX_KEYS) { const t = m[k]; if (t && t.isTexture && !t.isRenderTargetTexture && !t.isCubeTexture) set.add(t); }
+        if (m.uniforms) for (const k in m.uniforms) { const v = m.uniforms[k] && m.uniforms[k].value; if (v && v.isTexture && !v.isRenderTargetTexture && !v.isCubeTexture) set.add(v); }
+      }
+    }
+    return [...set].filter((t) => !renderer.properties.get(t).__webglInit);
+  }
+  function backgroundPrep(raw) {
+    if (bgDone || frameNo < 3) return;
+    const maxNew = raw > 1 / 30 ? 1 : 2; // 遅い画面では 1 フレーム 1 個
+    if (prepJobs.length) { safeCall(prepJobs.shift()); return; }
+    if (!bgObjs) { bgObjs = renderables(scene, false); return; }
+    let made = 0;
+    const t0 = performance.now();
+    while (bgObjs.length && made < maxNew && performance.now() - t0 < 6) {
+      const o = bgObjs.shift();
+      if (o.parent && needsProgram(o)) { compileObj(o); made++; }
+    }
+    if (bgObjs.length) return;
+    if (!bgTex) { bgTex = collectTextures(); return; }
+    const t = bgTex.shift();
+    if (t && !renderer.properties.get(t).__webglInit) { try { renderer.initTexture(t); } catch (e) { /* ignore */ } }
+    if (!bgTex.length && !prepJobs.length) bgDone = true;
   }
 
   // ---------- loop / pause ----------
   let running = false, paused = false, rafId = 0, lastTs = null, contextLost = false, loopErrLogged = false;
-  let frameNo = 0, warmed = false, shadowSkip = 0;
+  let frameNo = 0, shadowSkip = 0;
   function frame(ts) {
     rafId = requestAnimationFrame(frame);
     if (paused) return;
@@ -500,7 +558,7 @@ export function createEngine({ canvas, fallbackEl }) {
       engine.ghost._update(dt);
       if (!contextLost) {
         frameNo++;
-        if (!warmed && frameNo >= 2) { warmed = true; warmUp(); }
+        backgroundPrep(raw);
         // 影: 速い画面（ほぼ 60fps 以上）では 2 フレームに 1 回。遅い時は毎フレーム（動きが粗く見えないように）
         if (renderer.shadowMap.enabled) {
           if (shadowSkip > 0 && raw < 1 / 45) shadowSkip--;
@@ -556,6 +614,7 @@ export function createEngine({ canvas, fallbackEl }) {
     applyPixelRatio();
   }, false);
 
+  engine.prepLater(() => engine.ghost._prepare());
   handleResize();
   return engine;
 }
@@ -669,8 +728,9 @@ function createGhost(scene, camera, size) {
 
   const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
-  ensure(); // 最初から作っておく（シェーダの準備を開始時に済ませる）
+  // 手の絵は最初の場面では使わないので、遊んでいる間に裏で作る（engine.prepLater から _prepare）
   const ghost = {
+    _prepare() { ensure(); },
     get active() { return state.playing && !state.stopping; },
     play(points, { duration = 1.8, loop = true, tap = false, pause = 0.6 } = {}) {
       if (!points || !points.length) return;

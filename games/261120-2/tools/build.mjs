@@ -1,4 +1,4 @@
-// ビルド: src/main.js を esbuild で 1 つの IIFE にまとめ、src/index.template.html に埋め込んで index.html を出力する。
+// ビルド: src/texworker.js を文字列に、src/main.js を esbuild で 1 つの IIFE にまとめ、src/index.template.html に埋め込んで index.html を出力する。
 // 実行: (games/261120-2 で) node tools/build.mjs
 // パスはこのスクリプトの位置 (tools/..) を基準に解決するので、cwd に依存しない。
 import { build } from 'esbuild';
@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ENTRY = join(ROOT, 'src', 'main.js');
+const WORKER = join(ROOT, 'src', 'texworker.js');
 const TEMPLATE = join(ROOT, 'src', 'index.template.html');
 const FALLBACK = join(ROOT, 'src', 'assets', 'fallback.jpg');
 const OUT = join(ROOT, 'index.html');
@@ -24,6 +25,18 @@ function fail(msg) {
 if (!existsSync(ENTRY)) fail('src/main.js がまだありません。エントリポイントを用意してから実行してください。');
 if (!existsSync(TEMPLATE)) fail('src/index.template.html が見つかりません。');
 
+// 金魚テクスチャの Worker は別にまとめて文字列として本体へ埋め込む（Blob URL で起動。file:// でも動く）
+let workerSrc = '';
+try {
+  const w = await build({
+    entryPoints: [WORKER], bundle: true, format: 'iife', minify: true, target: ['es2019'], platform: 'browser',
+    charset: 'utf8', legalComments: 'none', write: false, logLevel: 'warning',
+  });
+  workerSrc = w.outputFiles[0].text;
+} catch (e) {
+  fail('Worker のビルドに失敗しました: ' + (e && e.message ? e.message : e));
+}
+
 let result;
 try {
   result = await build({
@@ -36,7 +49,7 @@ try {
     charset: 'utf8',
     legalComments: 'none',
     loader: { '.jpg': 'dataurl', '.png': 'dataurl' },
-    define: { 'process.env.NODE_ENV': '"production"' },
+    define: { 'process.env.NODE_ENV': '"production"', __TEXWORKER_SRC__: JSON.stringify(workerSrc) },
     write: false,
     logLevel: 'warning',
   });
