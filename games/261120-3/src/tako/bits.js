@@ -102,7 +102,9 @@ const FLAKE_V_BEGIN = /* glsl */ `
   else { p.x = flT; p.y = 0.0; }
   // twist about the length axis, then add the width offset rotated
   vec3 w = vec3(0.0, -flS * position.z, flC * position.z);
-  transformed = vec3(p.x, p.y, 0.0) + w + 0.02 * vec3(0.0, 1.0, 0.0);
+  // crinkled ruffle across the width
+  float rf = 0.06 * sin(position.z * 9.0 + flT * 11.0 + aFl.x) * (0.4 + flT);
+  transformed = vec3(p.x, p.y, 0.0) + w + vec3(-sin(flA), cos(flA), 0.0) * (0.015 + rf);
 }
 `;
 
@@ -121,7 +123,7 @@ export function createBits(G, balls) {
       case 'flake': {
         const m = new THREE.MeshStandardMaterial({
           map: getFlakeTexture(), color: 0xffffff, roughness: 0.62, side: THREE.DoubleSide, alphaTest: 0.45,
-          emissive: new THREE.Color('#3a1a0c'), emissiveIntensity: 0.6,
+          emissive: new THREE.Color('#5a2c18'), emissiveIntensity: 0.35,
         });
         m.onBeforeCompile = (sh) => {
           sh.uniforms.uTime = uTime;
@@ -223,7 +225,7 @@ export function createBits(G, balls) {
     else if (k === 'beni') { x = 0.6 + rnd() * 0.7; y = 1; z = 0.7 + rnd() * 0.6; }
     else if (k === 'aonori') { const s = 0.5 + rnd() * 1.0; x = s; y = 1; z = s * (0.6 + rnd() * 0.6); }
     else if (k === 'mayo') { const s = 0.92 + rnd() * 0.16; x = s; y = s * (0.9 + rnd() * 0.2); z = s; }
-    else if (k === 'flake') { const len = 1.5 + rnd() * 1.0; x = len; y = len; z = 0.55 + rnd() * 0.45; }
+    else if (k === 'flake') { const len = 1.0 + rnd() * 0.9; x = len; y = len; z = 0.5 + rnd() * 0.45; }
     P.sc[i * 3] = x; P.sc[i * 3 + 1] = y; P.sc[i * 3 + 2] = z;
   }
 
@@ -544,7 +546,11 @@ export function createBits(G, balls) {
                 if (h.type === O_BALL) ballNormal(h.ball, _v, _n);
                 else _n.copy(UP);
                 attach(P, i, _v, _n, h.type, h.ball);
-                if (isFlake && fa) { fa[i * 4 + 2] = 0.2 + rnd() * 1.2; flDirty = true; }
+                if (isFlake && fa) {
+                  // drape over a ball (bend with its curvature), lie looser on flat ground
+                  fa[i * 4 + 2] = h.type === O_BALL ? -(P.sc[i * 3] / 2.1) * 0.95 + rnd() * 0.45 : 0.2 + rnd() * 0.9;
+                  flDirty = true;
+                }
                 continue;
               }
             }
@@ -555,10 +561,10 @@ export function createBits(G, balls) {
             if ((o === O_BALL && ballChanged[P.oi[i]]) || (o === O_PLATTER && platterChanged)) writeLanded(P, i);
             if (isFlake && fa) {
               let heat = 0.05;
-              if (o === O_BALL) { const b = balls[P.oi[i]]; heat = b.heat > 0.15 ? 0.25 + 1.1 * b.heat : 0.05; }
-              else if (o === O_SKIRT) heat = 0.5;
+              if (o === O_BALL) { const b = balls[P.oi[i]]; heat = b.heat > 0.15 ? 0.15 + 0.6 * b.heat : 0.04; }
+              else if (o === O_SKIRT) heat = 0.35;
               if (P.boost[i] > 0) P.boost[i] = Math.max(0, P.boost[i] - dtc);
-              const amp = heat * (1 + 1.6 * P.boost[i]);
+              const amp = heat * (1 + 2.2 * P.boost[i]);
               if (Math.abs(fa[i * 4 + 1] - amp) > 0.01) { fa[i * 4 + 1] += (amp - fa[i * 4 + 1]) * Math.min(1, dtc * 4); flDirty = true; }
             }
           }

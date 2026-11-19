@@ -124,7 +124,6 @@ export function createBall(G, index, S) {
     flips: 0,
     spinning: false,
     done: false,
-    justDone: false,
     onDone: null,
     heat: 0,
     bitten: 0,
@@ -136,6 +135,14 @@ export function createBall(G, index, S) {
     _sauce: sauce,
   };
 
+  // one-shot flag: reading ball.justDone returns true once after the ball latched done
+  let jd = false;
+  Object.defineProperty(ball, 'justDone', {
+    get() { const v = jd; jd = false; return v; },
+    set(v) { jd = !!v; },
+    enumerable: true,
+  });
+
   function seedNoise() {
     const sd = st.seed + st.resets * 977;
     const b = S.base;
@@ -143,7 +150,7 @@ export function createBall(G, index, S) {
       const x = b[i * 3], y = b[i * 3 + 1], z = b[i * 3 + 2];
       const lf = fbm3(x * 1.6 + 3, y * 1.6, z * 1.6, sd, 3) - 0.5; // smooth marbling
       const hf = vnoise3(x * 6, y * 6, z * 6, sd + 5) - 0.5;
-      rateVar[i] = Math.max(0.5, 1 + lf * 0.9 + hf * 0.22);
+      rateVar[i] = Math.max(0.55, 1 + lf * 0.7 + hf * 0.18);
       jit[i] = (fbm3(x * 2.4, y * 2.4 + 7, z * 2.4, sd + 9, 2) - 0.5) * 0.12 + hf * 0.04;
       rNoise[i] = (fbm3(x * 1.3, y * 1.3, z * 1.3 + 11, sd + 13, 2) - 0.5) * 2;
     }
@@ -192,9 +199,10 @@ export function createBall(G, index, S) {
         dy = L + (vy - L) * s;
         dz = fz + (vz - fz) * s;
         flat = 1 - s;
-      } else if (inHole && vy < -0.05) {
+      } else if (inHole && vy < 0) {
         // tuck slightly inside the hole wall (avoid z-fighting with the plate)
-        dx *= 0.986; dy *= 0.986; dz *= 0.986;
+        const k = 1 - 0.014 * smoothstep(0, -0.5, vy);
+        dx *= k; dy *= k; dz *= k;
       }
       // to object frame: o = q^-1 * d
       tx = 2 * (-qy * dz + qz * dy); ty = 2 * (-qz * dx + qx * dz); tz = 2 * (-qx * dy + qy * dx);
@@ -290,9 +298,10 @@ export function createBall(G, index, S) {
           rate *= rateVar[i] * (ball.flips >= 1 ? 1.4 : 1);
         }
         if (ball.flips >= 1) rate += SOAK * (0.7 + 0.6 * rateVar[i]);
-        if (c > 0.62) rate *= 1 - 0.8 * smoothstep(0.62, 1.0, c);
+        if (c > 0.6) rate *= 1 - 0.88 * smoothstep(0.6, 0.95, c);
         if (st.evenT > 0) rate = Math.max(rate, c < 0.62 ? 0.9 : 0);
-        const lim = st.evenT > 0 ? Math.max(cap, 0.64) : cap;
+        // a phase-imposed cap (<1) holds shallow parts back more than the deep bottom
+        const lim = st.evenT > 0 ? Math.max(cap, 0.64) : cap < 1 ? cap * (0.4 + 0.6 * Math.min(1, Math.max(0, -vy / R))) : 1;
         if (rate > 0 && c < lim) {
           const nc = Math.min(lim, c + rate * dt);
           if (nc < 0.56 + jit[i] && nc > 0.39 + jit[i]) band = true;
@@ -416,7 +425,7 @@ export function createBall(G, index, S) {
       return 'wobble';
     }
     const ux = dx / len, uz = dz / len;
-    const deg = 95 + Math.min(1, Math.max(0, (speed - 15) / 100)) * 105 + (Math.random() - 0.5) * 10;
+    const deg = Math.min(200, 95 + Math.min(1, Math.max(0, (speed - 20) / 110)) * 60 + Math.max(0, speed - 110) * 0.4) + (Math.random() - 0.5) * 10;
     const ang = (deg * Math.PI) / 180;
     // axis = up x dir -> the top surface moves along the swipe
     startSpin(uz, -ux, ang, ang * 6.5);
@@ -788,7 +797,7 @@ export function createBall(G, index, S) {
       if (st.evenT > 0) st.evenT -= cdt;
       cookStep(cdt);
       // skirt cooks quickly (thin)
-      if (inHole && ball.skirt > 0 && G.state?.heat !== false) st.skirtCook = Math.min(0.5, st.skirtCook + cdt * 0.03);
+      if (inHole && ball.skirt > 0 && G.state?.heat !== false) st.skirtCook = Math.min(0.4, st.skirtCook + cdt * 0.025);
     }
 
     // sizzle burst when the raw batter hits the hole
@@ -831,7 +840,9 @@ export function createBall(G, index, S) {
 
     if (ball.mode !== st.lastMode) { st.lastMode = ball.mode; st.shapeDirty = true; }
     if (Math.abs(ball.fill - st.lastFill) > 1e-4) { st.lastFill = ball.fill; st.shapeDirty = true; }
-    if (qChanged && st.unset > 0) st.shapeDirty = true;
+    // rotation-only reshapes run at half rate (alternating balls) to keep 12 spinning balls cheap
+    st.frame = (st.frame || 0) + 1;
+    if (qChanged && st.unset > 0 && ((st.frame + index) % 2 === 0 || !ball.spinning)) st.shapeDirty = true;
     mesh.visible = ball.fill > 0.01;
     if (st.shapeDirty) rebuild();
     else if (st.colorDirty) writeColor();

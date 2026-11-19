@@ -46,7 +46,7 @@ export function layout(aspect) {
       portrait,
       camPitch: 58, // degrees below horizontal
       camFov: 38, // vertical fov
-      toolRest: new THREE.Vector3(3.5, 0, 23.5), // phases pour..flip: in front of the hot plate
+      toolRest: new THREE.Vector3(3.5, 0, 25), // phases pour..flip: in front of the hot plate
       toolSlideFrom: new THREE.Vector3(34, 0, 26), // tools are "handed in" from off-screen right
       platter,
       platterSlideFrom: new THREE.Vector3(-40, 0, 31.5),
@@ -55,7 +55,7 @@ export function layout(aspect) {
       dressRest: new THREE.Vector3(2.5, 0, 49.5), // phases sauce..flakes: in front of the platter
       runawayStop: new THREE.Vector3(8.2, 0, 17.6), // the runaway ball bumps the hot plate housing here
       frames: {
-        cook: B(-13.5, 13.5, -17.5, 28),
+        cook: B(-13.5, 13.5, -17.5, 30.5),
         plate: B(-13.5, 13.5, -17.5, 43.5),
         dress: B(-10.5, 10.5, 19.5, 55),
         eat: B(-10, 10, 19, 44.5),

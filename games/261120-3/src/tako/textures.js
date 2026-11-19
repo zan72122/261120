@@ -4,6 +4,12 @@ import { pnoise2, mulberry } from './noise.js';
 
 let detailTex = null;
 let flakeTex = null;
+let gradTex = null;
+export const GRAD_K = 900; // slope encoding factor (slope per texel * GRAD_K)
+export function getGradTexture() {
+  if (!gradTex) getDetailTexture();
+  return gradTex;
+}
 
 // Tileable RGBA data texture:
 //  r = surface height (fine crust + pores), g = low-frequency mottle,
@@ -18,18 +24,27 @@ export function getDetailTexture() {
   for (let y = 0; y < S; y++) {
     for (let x = 0; x < S; x++) {
       const u = x / S, v = y / S;
-      let hh = 0.4 * pnoise2(u * 8, v * 8, 8, 1) + 0.3 * pnoise2(u * 24, v * 24, 24, 2) + 0.2 * pnoise2(u * 64, v * 64, 64, 3) + 0.1 * pnoise2(u * 128, v * 128, 128, 4);
-      // crusty "crinkle": ridged high-frequency term
-
+      const hh = 0.06 * pnoise2(u * 128, v * 128, 128, 4);
       h[y * S + x] = hh;
       g[y * S + x] = 0.6 * pnoise2(u * 3, v * 3, 3, 7) + 0.4 * pnoise2(u * 7, v * 7, 7, 8);
     }
   }
   const rnd = mulberry(1234);
   const wrapD = (d) => (d > S / 2 ? d - S : d < -S / 2 ? d + S : d);
+  // isotropic soft lumps (no value-noise grid artifacts in the bump)
+  for (let k = 0; k < 900; k++) {
+    const cx = rnd() * S, cy = rnd() * S, rr = 3 + Math.pow(rnd(), 2.2) * 26, amp = (rnd() - 0.4) * (0.25 + rr / 40);
+    const R = Math.ceil(rr * 2);
+    for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+      const px = ((Math.floor(cx) + dx) % S + S) % S, py = ((Math.floor(cy) + dy) % S + S) % S;
+      const ddx = wrapD(px - cx), ddy = wrapD(py - cy);
+      const d2 = (ddx * ddx + ddy * ddy) / (rr * rr);
+      if (d2 < 4) h[py * S + px] += amp * Math.exp(-d2 * 1.5);
+    }
+  }
   // pores / tiny bubbles
-  for (let k = 0; k < 420; k++) {
-    const cx = rnd() * S, cy = rnd() * S, rr = 1.5 + rnd() * rnd() * 7, dep = 0.2 + rnd() * 0.4;
+  for (let k = 0; k < 240; k++) {
+    const cx = rnd() * S, cy = rnd() * S, rr = 1.3 + rnd() * rnd() * 5, dep = 0.12 + rnd() * 0.28;
     const R = Math.ceil(rr + 1);
     for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
       const px = ((Math.floor(cx) + dx) % S + S) % S, py = ((Math.floor(cy) + dy) % S + S) % S;
@@ -73,6 +88,24 @@ export function getDetailTexture() {
     data[i * 4 + 2] = Math.round(gb[i] * 255);
     data[i * 4 + 3] = Math.round(ra[i] * 255);
   }
+  // gradient texture: r,g = height slope (per texel, *GRAD_K, biased), b = height, a = mottle
+  const gd = new Uint8Array(S * S * 4);
+  const hn = (x, y) => (h[(((y % S) + S) % S) * S + (((x % S) + S) % S)] - mn) / (mx - mn);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const gx = (hn(x + 1, y) - hn(x - 1, y)) * 0.5, gy = (hn(x, y + 1) - hn(x, y - 1)) * 0.5;
+    const i = (y * S + x) * 4;
+    gd[i] = Math.max(0, Math.min(255, Math.round(128 + gx * GRAD_K)));
+    gd[i + 1] = Math.max(0, Math.min(255, Math.round(128 + gy * GRAD_K)));
+    gd[i + 2] = data[i];
+    gd[i + 3] = data[i + 1];
+  }
+  gradTex = new THREE.DataTexture(gd, S, S, THREE.RGBAFormat);
+  gradTex.wrapS = gradTex.wrapT = THREE.RepeatWrapping;
+  gradTex.magFilter = THREE.LinearFilter;
+  gradTex.minFilter = THREE.LinearMipmapLinearFilter;
+  gradTex.generateMipmaps = true;
+  gradTex.anisotropy = 4;
+  gradTex.needsUpdate = true;
   detailTex = new THREE.DataTexture(data, S, S, THREE.RGBAFormat);
   detailTex.wrapS = detailTex.wrapT = THREE.RepeatWrapping;
   detailTex.magFilter = THREE.LinearFilter;
@@ -95,7 +128,7 @@ export function getFlakeTexture() {
       const edgeN = pnoise2(v * 14, 0.5, 14, 13) * 0.5 + pnoise2(v * 40, 1.5, 40, 14) * 0.5;
       const half = 0.5 - Math.abs(u - 0.5); // 0 at the side edges
       const tip = Math.min(v, 1 - v);
-      let a = half * 2 - (0.12 + edgeN * 0.35);
+      let a = half * 2 - (0.1 + edgeN * 0.55);
       a = Math.min(a, tip * 7 - edgeN * 0.5);
       // a few holes / tears
       const hole = pnoise2(u * 9, v * 9, 9, 15);
@@ -103,7 +136,7 @@ export function getFlakeTexture() {
       const alpha = a > 0 ? Math.min(1, a * 6) : 0;
       // colour: pale pink-tan with darker red-brown fibres
       const dark = fib;
-      const r = 214 - dark * 60, gg = 160 - dark * 62, b = 128 - dark * 50;
+      const r = 232 - dark * 45, gg = 186 - dark * 55, b = 160 - dark * 45;
       const i = (y * W + x) * 4;
       data[i] = r; data[i + 1] = gg; data[i + 2] = b; data[i + 3] = Math.round(alpha * 255);
     }

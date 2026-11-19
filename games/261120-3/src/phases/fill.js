@@ -1,4 +1,5 @@
 // PLACEHOLDER phase 'fill' — replaced by the stage-2 phase author.
+import { canon } from './common.js';
 export default {
   id: 'fill',
   enter(G) {
@@ -12,6 +13,8 @@ export default {
   onDown() {},
   onMove() {},
   onUp() {},
-  fastForward() {},
+  fastForward(G) {
+    canon.filled(G);
+  },
   reset() {},
 };

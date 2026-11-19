@@ -92,7 +92,7 @@ export function createSkirt(scene, index) {
         pos[i] = x; pos[i + 1] = y; pos[i + 2] = z;
         obj[i] = (x + c.x) * 0.476; obj[i + 1] = 1; obj[i + 2] = (z + c.z) * 0.476;
         // thin edge browns first (lacy brown border)
-        const ck = cook * (1 + 0.38 * f * f) + edgeN[a] * 0.1 * f;
+        const ck = cook * (1 + 0.5 * f * f * f) + edgeN[a] * 0.08 * f;
         tako[i] = Math.min(0.9, Math.max(0, ck));
         tako[i + 1] = 0;
         tako[i + 2] = 0;
