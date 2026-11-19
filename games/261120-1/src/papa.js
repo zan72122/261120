@@ -231,10 +231,10 @@
       S = 256;
       t = texFromFn(S, function (x, y, o) {
         var d = (x + y) % 64, d2 = (x + y + 26) % 64;
-        var s1 = G.clamp(1.6 - Math.abs(d - 3), 0, 1), s2 = G.clamp(1.0 - Math.abs(d2 - 2), 0, 1);
+        var s1 = G.clamp(1.3 - Math.abs(d - 3), 0, 1), s2 = G.clamp(1.0 - Math.abs(d2 - 2), 0, 1);
         var silk = 0.94 + 0.06 * Math.sin((x - y) / S * Math.PI * 2 * 80);
         var r = 27, gg = 40, b = 72;
-        r = G.lerp(r, 170, s1); gg = G.lerp(gg, 178, s1); b = G.lerp(b, 198, s1);
+        r = G.lerp(r, 138, s1); gg = G.lerp(gg, 146, s1); b = G.lerp(b, 172, s1);
         r = G.lerp(r, 120, s2 * 0.9); gg = G.lerp(gg, 52, s2 * 0.9); b = G.lerp(b, 62, s2 * 0.9);
         o[0] = r * silk; o[1] = gg * silk; o[2] = b * silk;
       }, { srgb: true, repeat: [1, 1], aniso: aniso });
@@ -252,7 +252,7 @@
     } else if (name === 'nut') { // どんぐりの実: u=周 v=先端→帽子
       S = 256;
       t = texFromFn(S, function (x, y, o) {
-        var u = x / S, v = y / S;
+        var u = x / S, v = 1 - y / S;
         var n = tileNoise(x, y, S, S, 0.04, 5), streak = tileNoise(x * 4, y * 0.25, S * 4, S * 0.25, 0.35, 8);
         var line = Math.pow(Math.abs(Math.sin(u * Math.PI * 44 + n * 4)), 24);
         var r, gg, b;
@@ -267,14 +267,16 @@
       S = 256;
       var mk = function (bump) {
         return function (x, y, o) {
-          var u = x / S, v = y / S, rowsN = 8, colsN = 22;
-          var rv = v * rowsN, row = Math.floor(rv), cvv = rv - row;
-          var cu = u * colsN + (row % 2) * 0.5; cu = cu - Math.floor(cu);
-          var w = 1 - Math.pow(Math.abs(cu * 2 - 1), 1.6);
-          var h = G.clamp(w * Math.pow(cvv, 0.55) * 1.25, 0, 1);
-          var n = tileNoise(x, y, S, S, 0.12, 19);
-          if (bump) { o[0] = o[1] = o[2] = (h * 0.8 + n * 0.2) * 255; return; }
-          var k = 0.35 + 0.75 * h + (n - 0.5) * 0.3;
+          var u = x / S, v = 1 - y / S, rowsN = 13, colsN = 34;
+          var jit = (G.noise2(u * 9, v * 9, 3) - 0.5) * 0.5;
+          var rv = v * rowsN + jit * 0.6, row = Math.floor(rv), cvv = rv - row;
+          var cuRaw = u * colsN + (row % 2) * 0.5 + jit, cell = Math.floor(cuRaw), cu = cuRaw - cell;
+          var hv = G.noise2(cell * 1.7, row * 2.3, 9);
+          var w = 1 - Math.pow(Math.abs(cu * 2 - 1), 1.3 + hv);
+          var h = G.clamp(w * Math.pow(cvv, 0.5) * (1.0 + 0.4 * hv), 0, 1);
+          var n = tileNoise(x, y, S, S, 0.2, 19);
+          if (bump) { o[0] = o[1] = o[2] = (h * 0.7 + n * 0.3) * 255; return; }
+          var k = 0.55 + 0.55 * h + (n - 0.5) * 0.35 + (hv - 0.5) * 0.2;
           o[0] = 128 * k + 18; o[1] = 108 * k + 12; o[2] = 76 * k + 6;
         };
       };
@@ -315,9 +317,8 @@
     for (i = 0; i < cpa.count; i++) {
       var cx = cpa.getX(i), cz = cpa.getZ(i), cy = cpa.getY(i), cr = Math.sqrt(cx * cx + cz * cz);
       if (cr < 1e-5) continue;
-      var ca = Math.atan2(cz, cx), row = (cy - 0.029) / 0.0021;
-      var bump = Math.max(0, Math.sin(ca * 11 + Math.floor(row) * 1.6) * Math.sin((row % 1) * Math.PI));
-      var ck = 1 + (0.035 * bump + 0.02 * (G.noise2(ca * 3, cy * 400, 5) - 0.5)) * G.smooth(0.0295, 0.032, cy);
+      var ca = Math.atan2(cz, cx);
+      var ck = 1 + (0.03 * (G.noise2(ca * 6 + 9, cy * 900, 5) - 0.5) + 0.02 * (G.noise2(ca * 2, cy * 300, 8) - 0.5)) * G.smooth(0.0295, 0.032, cy);
       cpa.setX(i, cx * ck); cpa.setZ(i, cz * ck);
     }
     capGeo.computeVertexNormals();
@@ -372,15 +373,15 @@
     var stitchMat = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 1, transparent: true, opacity: 0.22, alphaMap: stitchTex, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
 
     var woolTex = getTex('wool', aniso).clone(); woolTex.repeat.set(14, 14); woolTex.needsUpdate = true;
-    var pantsMat = new THREE.MeshStandardMaterial({ color: 0x46484e, roughness: 0.93, map: woolTex });
+    var pantsMat = new THREE.MeshStandardMaterial({ color: 0x44474f, roughness: 0.93, map: woolTex });
     var pantsDark = new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
     var leatherTex = getTex('leather', aniso).clone(); leatherTex.repeat.set(30, 30); leatherTex.needsUpdate = true;
     var beltMat = new THREE.MeshPhysicalMaterial({ color: 0x2a1c13, roughness: 0.42, clearcoat: 0.35, clearcoatRoughness: 0.5, bumpMap: leatherTex, bumpScale: 0.5 });
     var metalMat = new THREE.MeshStandardMaterial({ color: 0xd2d3d6, metalness: 1, roughness: 0.24 });
     var tieTex = getTex('tie', aniso).clone(); tieTex.repeat.set(7, 7); tieTex.needsUpdate = true;
-    var tieMat = new THREE.MeshPhysicalMaterial({ map: tieTex, roughness: 0.42, sheen: 0.6, sheenRoughness: 0.35, sheenColor: new THREE.Color(0x8090b8) });
+    var tieMat = new THREE.MeshPhysicalMaterial({ map: tieTex, roughness: 0.55, sheen: 0.6, sheenRoughness: 0.35, sheenColor: new THREE.Color(0x8090b8) });
     var skinTex = getTex('skin', aniso).clone(); skinTex.repeat.set(4, 4); skinTex.needsUpdate = true;
-    var skinMat = new THREE.MeshPhysicalMaterial({ color: 0xd9a587, roughness: 0.55, map: skinTex, sheen: 0.25, sheenColor: new THREE.Color(0xffd0b8), sheenRoughness: 0.6 });
+    var skinMat = new THREE.MeshPhysicalMaterial({ color: 0xc99a82, roughness: 0.6, map: skinTex, sheen: 0.25, sheenColor: new THREE.Color(0xffd0b8), sheenRoughness: 0.6 });
     var knitTex = getTex('knit', aniso).clone(); knitTex.repeat.set(1, 3); knitTex.needsUpdate = true;
     var sockMat = new THREE.MeshStandardMaterial({ color: 0x8d8f94, roughness: 0.96, map: knitTex });
     var terryTex = getTex('terry', aniso).clone(); terryTex.repeat.set(3, 3); terryTex.needsUpdate = true;
@@ -468,9 +469,9 @@
     var _d = new THREE.Vector3();
     function sleeve(sx) {
       var pts = [
-        new THREE.Vector3(sx * 0.125, 1.398, -0.006),
-        new THREE.Vector3(sx * 0.186, 1.402, -0.006),
-        new THREE.Vector3(sx * 0.224, 1.336, -0.012),
+        new THREE.Vector3(sx * 0.125, 1.386, -0.006),
+        new THREE.Vector3(sx * 0.180, 1.392, -0.006),
+        new THREE.Vector3(sx * 0.218, 1.330, -0.012),
         new THREE.Vector3(sx * 0.238, 1.225, -0.024),
         new THREE.Vector3(sx * 0.240, 1.120, -0.028),
         new THREE.Vector3(sx * 0.224, 1.030, 0.006),
@@ -481,19 +482,19 @@
       var path = makePath(pts, 160, new THREE.Vector3(0, 0, 1));
       return sweepGeom(path, seg(28), seg(130), function (t, D, r) {
         var base;
-        if (t < 0.08) base = G.lerp(0.050, 0.058, t / 0.08);
-        else if (t < 0.25) base = 0.059;
-        else if (t < 0.5) base = G.lerp(0.059, 0.050, (t - 0.25) / 0.25);
-        else if (t < 0.86) base = G.lerp(0.050, 0.043, (t - 0.5) / 0.36);
-        else base = 0.0465;                       // カフス
-        if (t > 0.855 && t < 0.865) base = G.lerp(0.043, 0.0465, (t - 0.855) / 0.01);
+        if (t < 0.08) base = G.lerp(0.046, 0.053, t / 0.08);
+        else if (t < 0.25) base = 0.053;
+        else if (t < 0.5) base = G.lerp(0.053, 0.046, (t - 0.25) / 0.25);
+        else if (t < 0.86) base = G.lerp(0.046, 0.0395, (t - 0.5) / 0.36);
+        else base = 0.0425;                       // カフス
+        if (t > 0.855 && t < 0.865) base = G.lerp(0.0395, 0.0425, (t - 0.855) / 0.01);
         r.a = base; r.b = base * 0.93;
         var outw = D.x * sx, fwd = D.z;
         var m = 0;
         // 外側の折り目（アイロンの線）
         m += 0.035 * Math.exp(-(1 - outw) * 90) * G.smooth(0.28, 0.36, t) * (1 - G.smooth(0.8, 0.85, t));
         // ひじの内側のしわ
-        m += 0.07 * gauss(t - 0.53, 0.07) * Math.max(0, fwd) * Math.sin(t * 160 + D.y * 6);
+        m += 0.035 * gauss(t - 0.53, 0.06) * Math.pow(Math.max(0, fwd), 2) * Math.sin(t * 110 + Math.atan2(D.y, D.x) * 2);
         // カフスの上のたるみ
         m += 0.045 * gauss(t - 0.82, 0.03) * Math.sin(Math.atan2(D.z, D.x) * 5 + 1.0);
         // 肩口
@@ -669,12 +670,12 @@
     // ---------------- ネクタイ
     function frontZ(y) { return TORSO.point(y, 0, _p).z; }
     var KNOT_Y = 1.468, TIP_Y = 1.088, CHEST_Y = 1.26;
-    var knotZ = 0.064;
+    var knotZ = 0.072;
     var knotGeo = gridGeom(seg(24), 10, function (u, v, out) {
       var th = u * Math.PI * 2, y = G.lerp(1.517, 1.462, v);
       var w = G.lerp(0.024, 0.0135, v) * (1 + 0.08 * Math.sin(Math.PI * v));
       var d = G.lerp(0.0125, 0.0085, v);
-      var zc = G.lerp(0.058, 0.0715, v);
+      var zc = G.lerp(0.066, 0.080, v);
       var c = Math.cos(th), s = Math.sin(th);
       var dimple = 1 - 0.25 * gauss(s, 0.25) * Math.max(0, c) * gauss(v - 0.55, 0.25);
       out.set(s * w * (1 + 0.1 * Math.max(0, c)), y, zc + c * d * dimple);
@@ -689,7 +690,7 @@
       if (y < tipStart) w *= Math.max(0.0001, (y - TIP_Y) / (tipStart - TIP_Y));
       var zc = frontZ(y) + 0.0045;
       if (y < CHEST_Y) zc = Math.max(zc, zChest - 0.08 * (CHEST_Y - y));
-      if (y > 1.43) zc = G.lerp(zc, knotZ + 0.004, G.smooth(1.43, KNOT_Y + 0.008, y));
+      if (y > 1.42) zc = Math.max(zc, G.lerp(zc, knotZ + 0.010, G.smooth(1.42, KNOT_Y + 0.008, y)));
       var th = u * Math.PI * 2, c = Math.cos(th), s = Math.sin(th);
       var thick = c > 0 ? 0.0032 : 0.0014;
       out.set(s * w * 0.5, y, zc + c * thick + 0.0012 * (1 - s * s));
@@ -700,8 +701,9 @@
     // ---------------- ズボン（腰まわり）
     var PELVIS = makeProfile([
       [0.772, 0.050, 0.030, 0.034, 2.0, 0.0],
-      [0.792, 0.125, 0.078, 0.090, 2.2, 0.0],
-      [0.820, 0.166, 0.103, 0.124, 2.3, -0.004],
+      [0.792, 0.115, 0.050, 0.085, 2.2, 0.0],
+      [0.820, 0.164, 0.084, 0.122, 2.3, -0.004],
+      [0.845, 0.174, 0.100, 0.128, 2.3, -0.005],
       [0.870, 0.180, 0.111, 0.130, 2.3, -0.005],
       [0.930, 0.180, 0.111, 0.122, 2.3, 0.0],
       [0.970, 0.175, 0.108, 0.116, 2.3, 0.0],
@@ -793,17 +795,16 @@
     [[0, BH / 2 - BT / 2, BW, BT], [0, -BH / 2 + BT / 2, BW, BT], [-BW / 2 + BT / 2, 0, BT, BH], [BW / 2 - BT / 2, 0, BT, BH]].forEach(function (b) {
       var m = addMesh(buckle, new THREE.BoxGeometry(b[2], b[3], 0.004), metalMat); m.position.set(b[0], b[1], 0);
     });
-    var prong = addMesh(buckle, new THREE.BoxGeometry(0.028, 0.003, 0.003), metalMat); prong.position.set(0.010, 0, 0.0012);
     body.add(buckle);
 
     // ---------------- 脚（もも→すね→足）
     var legs = [];
     [1, -1].forEach(function (sx) {
       var hip = new THREE.Group(); hip.position.set(sx * 0.088, 0.88, 0); body.add(hip);
-      var thighPath = makePath([new THREE.Vector3(0, 0.03, -0.006), new THREE.Vector3(0, -0.10, -0.002), new THREE.Vector3(sx * 0.002, -0.25, 0.002), new THREE.Vector3(sx * 0.004, -0.43, 0.006)], 60, new THREE.Vector3(0, 0, 1));
+      var thighPath = makePath([new THREE.Vector3(0, 0.03, -0.006), new THREE.Vector3(0, -0.10, -0.002), new THREE.Vector3(sx * 0.002, -0.25, 0.002), new THREE.Vector3(sx * 0.004, -0.415, 0.006), new THREE.Vector3(sx * 0.0045, -0.45, 0.006)], 60, new THREE.Vector3(0, 0, 1));
       var thighGeo = sweepGeom(thighPath, seg(36), seg(40), function (t, D, r) {
-        var y = 0.91 - t * 0.46;
-        var a = y > 0.80 ? G.lerp(0.093, 0.084, G.smooth(0.80, 0.91, y)) : G.lerp(0.067, 0.093, G.smooth(0.46, 0.80, y));
+        var y = 0.91 - t * 0.48;
+        var a = y > 0.80 ? G.lerp(0.095, 0.086, G.smooth(0.80, 0.91, y)) : G.lerp(0.067, 0.095, G.smooth(0.46, 0.80, y));
         r.a = a; r.b = a * 0.95;
         r.m = 0.05 * Math.exp(-(1 - D.z) * 140) * G.smooth(0.82, 0.76, y) + 0.012 * Math.max(0, -D.z) * Math.sin(t * 40);
       });
@@ -811,7 +812,7 @@
       var knee = new THREE.Group(); knee.position.set(sx * 0.004, -0.40, 0.006); hip.add(knee);
       var shinPath = makePath([new THREE.Vector3(0, 0.05, 0), new THREE.Vector3(0, -0.12, -0.003), new THREE.Vector3(sx * 0.003, -0.28, -0.006), new THREE.Vector3(sx * 0.006, -0.408, -0.008)], 60, new THREE.Vector3(0, 0, 1));
       var shinGeo = sweepGeom(shinPath, seg(36), seg(36), function (t, D, r) {
-        var a = G.lerp(0.068, 0.0575, G.smooth(0, 0.7, t)) + 0.0035 * G.smooth(0.9, 1, t);
+        var a = G.lerp(0.0655, 0.0575, G.smooth(0.08, 0.7, t)) - 0.006 * (1 - G.smooth(0.02, 0.12, t)) + 0.0035 * G.smooth(0.9, 1, t);
         r.a = a * (1 + 0.04 * G.smooth(0.88, 1, t) * Math.max(0, D.z)); r.b = a * 0.95;
         r.m = 0.05 * Math.exp(-(1 - D.z) * 140) * (1 - G.smooth(0.9, 1, t) * 0.5) + 0.02 * Math.exp(-(1 + D.z) * 140);
       });
@@ -821,7 +822,7 @@
       var foot = new THREE.Group(); foot.rotation.y = sx * 0.12; ankle.add(foot);
       var sock = addMesh(foot, new THREE.CylinderGeometry(0.039, 0.042, 0.10, seg(20), 1, true), sockMat); sock.position.set(0, 0.0, -0.004);
       var sockFoot = addMesh(foot, new THREE.SphereGeometry(1, seg(24), seg(16)), sockMat);
-      sockFoot.scale.set(0.044, 0.034, 0.118); sockFoot.position.set(0, -0.046, 0.058);
+      sockFoot.scale.set(0.040, 0.025, 0.110); sockFoot.position.set(0, -0.054, 0.056);
       var heel = addMesh(foot, new THREE.SphereGeometry(1, seg(18), seg(12)), sockMat);
       heel.scale.set(0.039, 0.040, 0.044); heel.position.set(0, -0.040, -0.010);
       // スリッパの底
@@ -846,10 +847,10 @@
       // 甲（前半分を覆う）
       var upGeo = new THREE.SphereGeometry(1, seg(28), seg(14), 0, Math.PI, 0, Math.PI / 2);
       var up = addMesh(foot, upGeo, slipMat);
-      up.scale.set(0.058, 0.050, 0.112); up.position.set(sx * 0.002, -0.078 + 0.017, 0.084);
+      up.scale.set(0.057, 0.044, 0.112); up.position.set(sx * 0.002, -0.078 + 0.017, 0.084);
       // 甲の口のふち
       var edge = addMesh(foot, new THREE.TorusGeometry(1, 0.075, 6, seg(28), Math.PI), pipeMat);
-      edge.scale.set(0.058, 0.050, 0.06); edge.position.copy(up.position);
+      edge.scale.set(0.057, 0.044, 0.06); edge.position.copy(up.position);
       void sole; void pad;
       legs.push({ sx: sx, hip: hip, knee: knee, ankle: ankle, foot: foot });
     });
@@ -923,7 +924,7 @@
     }
 
     api.update = function (dt, t) {
-      dt = Math.min(dt || 0.016, 0.05); t = t || 0;
+      dt = G.clamp(dt || 0, 0, 0.05); t = t || 0;
       // --- 歩き / 向き
       var moving = false, stepAmp = 0;
       if (walk) {
@@ -1014,7 +1015,7 @@
       if (peekCur > 0.01) {
         peekHolder.visible = true;
         peekHolder.position.copy(pkMouthLocal).addScaledVector(pkMouthN, 0.0035 + peekCur * 0.0075);
-        peekHolder.position.addScaledVector(pkUp, -0.038 + peekCur * 0.040);
+        peekHolder.position.addScaledVector(pkUp, -0.040 + peekCur * 0.058);
         peekAcorn.rotation.z = 0.12 + 0.06 * Math.sin(t * 2.1) * peekCur;
       } else peekHolder.visible = false;
     };
@@ -1088,7 +1089,7 @@
     var ax = new THREE.Vector3(), pz = new THREE.Vector3();
     a.update = function (dt, surfaceY, colliders, bounds) {
       if (a.mode === 'hidden') { a.rollSpeed = 0; return; }
-      dt = Math.min(dt || 0.016, 0.05);
+      dt = G.clamp(dt || 0, 0, 0.05);
       if (surfaceY != null) surfY = surfaceY;
       var ground = surfY + REST;
       rockT += dt;
