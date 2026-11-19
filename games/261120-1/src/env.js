@@ -500,7 +500,7 @@
       st.focusAmt = G.damp(st.focusAmt, st.focusOn ? 1 : 0, 4, dt);
       st.fpos.x = G.damp(st.fpos.x, st.ftarget.x, 5, dt); st.fpos.y = G.damp(st.fpos.y, st.ftarget.y, 5, dt); st.fpos.z = G.damp(st.fpos.z, st.ftarget.z, 5, dt);
       st.frad = G.damp(st.frad, st.fradT, 5, dt);
-      var m = st.mood, a = MOOD.morning, b = MOOD.warm, dim = 1 - 0.15 * st.focusAmt;
+      var m = st.mood, a = MOOD.morning, b = MOOD.warm, dim = 1 - 0.26 * st.focusAmt;
       hemi.color.lerpColors(a.hemiSky, b.hemiSky, m); hemi.groundColor.lerpColors(a.hemiGnd, b.hemiGnd, m);
       hemi.intensity = G.lerp(a.hemiI, b.hemiI, m) * dim;
       sun.color.lerpColors(a.sunC, b.sunC, m); sun.intensity = G.lerp(a.sunI, b.sunI, m) * dim;
@@ -510,7 +510,7 @@
       focus.position.set(st.fpos.x + 0.12, st.fpos.y + fh, st.fpos.z + 0.45);
       focus.target.position.copy(st.fpos);
       focus.angle = G.clamp(Math.atan(st.frad * 2.0 / fh), 0.08, 0.9);
-      focus.intensity = 1.9 * st.focusAmt;
+      focus.intensity = 2.5 * st.focusAmt;
       // かごのゆれ（ばね）
       if (bw.a !== 0 || bw.v !== 0) {
         bw.v += (-160 * bw.a - 7 * bw.v) * dt; bw.a += bw.v * dt;

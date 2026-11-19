@@ -356,7 +356,7 @@
     var hasFabric = typeof G.makeFabricMaterial === 'function';
     function newShirtMat() {
       var m = null;
-      if (hasFabric) { try { m = G.makeFabricMaterial({ color: G.SHIRT_COLORS[0], repeat: [24, 24] }); } catch (e) { m = null; } }
+      if (hasFabric) { try { m = G.makeFabricMaterial({ color: G.SHIRT_COLORS[0], repeat: 24 }); } catch (e) { m = null; } }
       if (!m) {
         var tb = getTex('shirtBump', aniso).clone(); tb.repeat.set(26, 26); tb.needsUpdate = true;
         var tm = getTex('shirtTone', aniso).clone(); tm.repeat.set(9, 9); tm.needsUpdate = true;
@@ -700,19 +700,20 @@
 
     // ---------------- ズボン（腰まわり）
     var PELVIS = makeProfile([
-      [0.772, 0.050, 0.030, 0.034, 2.0, 0.0],
-      [0.792, 0.115, 0.050, 0.085, 2.2, 0.0],
-      [0.820, 0.164, 0.084, 0.122, 2.3, -0.004],
-      [0.845, 0.174, 0.100, 0.128, 2.3, -0.005],
-      [0.870, 0.180, 0.111, 0.130, 2.3, -0.005],
-      [0.930, 0.180, 0.111, 0.122, 2.3, 0.0],
-      [0.970, 0.175, 0.108, 0.116, 2.3, 0.0],
+      [0.740, 0.030, 0.024, 0.024, 2.0, 0.0],
+      [0.772, 0.085, 0.064, 0.034, 2.0, 0.0],
+      [0.792, 0.132, 0.084, 0.085, 2.4, 0.0],
+      [0.820, 0.168, 0.101, 0.122, 3.0, -0.004],
+      [0.845, 0.176, 0.108, 0.128, 3.0, -0.005],
+      [0.870, 0.181, 0.110, 0.130, 2.8, -0.005],
+      [0.930, 0.180, 0.108, 0.122, 2.4, 0.0],
+      [0.970, 0.175, 0.107, 0.116, 2.3, 0.0],
       [0.999, 0.172, 0.106, 0.113, 2.3, 0.0],
       [1.006, 0.168, 0.104, 0.110, 2.3, 0.0],
       [1.008, 0.160, 0.099, 0.107, 2.3, 0.0]
     ]);
     var pelvisGeo = gridGeom(seg(72), seg(40), function (u, v, out) {
-      var th = u * Math.PI * 2, y = G.lerp(0.772, 1.008, v);
+      var th = u * Math.PI * 2, y = G.lerp(0.740, 1.008, v);
       PELVIS.point(y, th, out);
     }, { closedU: true, axisY: true });
     addMesh(body, pelvisGeo, pantsMat);
@@ -804,8 +805,10 @@
       var thighPath = makePath([new THREE.Vector3(0, 0.03, -0.006), new THREE.Vector3(0, -0.10, -0.002), new THREE.Vector3(sx * 0.002, -0.25, 0.002), new THREE.Vector3(sx * 0.004, -0.415, 0.006), new THREE.Vector3(sx * 0.0045, -0.45, 0.006)], 60, new THREE.Vector3(0, 0, 1));
       var thighGeo = sweepGeom(thighPath, seg(36), seg(40), function (t, D, r) {
         var y = 0.91 - t * 0.48;
-        var a = y > 0.80 ? G.lerp(0.095, 0.086, G.smooth(0.80, 0.91, y)) : G.lerp(0.067, 0.095, G.smooth(0.46, 0.80, y));
-        r.a = a; r.b = a * 0.95;
+        var ax = y > 0.78 ? G.lerp(0.094, 0.070, G.smooth(0.78, 0.87, y)) : G.lerp(0.067, 0.095, G.smooth(0.46, 0.80, y));   // 横: 上端は腰の中に隠す
+        var az = G.lerp(0.067, 0.105, G.smooth(0.46, 0.80, y)) * (1 - 0.10 * G.smooth(0.86, 0.91, y));   // 前後: 腰の前の面とつながる（境目を作らない）
+        var hem = 1 - 0.13 * G.smooth(0.90, 1.0, t);   // すその端はすねの筒の内側へ入れる（ひざに段差を作らない）
+        r.a = az * hem; r.b = ax * 0.95 * hem;
         r.m = 0.05 * Math.exp(-(1 - D.z) * 140) * G.smooth(0.82, 0.76, y) + 0.012 * Math.max(0, -D.z) * Math.sin(t * 40);
       });
       addMesh(hip, thighGeo, pantsMat);
@@ -873,7 +876,13 @@
     api.setShirtColor = function (i) {
       colorIdx = ((i % G.SHIRT_COLORS.length) + G.SHIRT_COLORS.length) % G.SHIRT_COLORS.length;
       var hex = G.SHIRT_COLORS[colorIdx];
-      shirtMats.forEach(function (m) { if (m.color) m.color.setHex(hex); });
+      // 明るい部屋で白く飛ばないよう、少しだけ濃く（床で見たシャツと同じ色に見せる）
+      shirtMats.forEach(function (m) {
+        if (!m.color) return;
+        m.color.setHex(hex);
+        m.color.r = Math.pow(m.color.r, 1.4); m.color.g = Math.pow(m.color.g, 1.4); m.color.b = Math.pow(m.color.b, 1.4);
+        if (m.sheen !== undefined) m.sheen = 0.2;
+      });
       pocketInMat.color.setHex(hex).multiplyScalar(0.28);
     };
     api.setShirtColor(0);
