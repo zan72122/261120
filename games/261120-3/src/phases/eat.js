@@ -80,7 +80,7 @@ function mouthPoint(G, out) {
   const d = Math.max(15, Math.min(40, G.cfg.BALL_R / (0.42 * short)));
   out.copy(c.position).addScaledVector(camF, d).addScaledVector(camU, -th * d * 0.14);
   // pick handle toward the bottom-right of the screen (the hand), slightly toward the viewer
-  dirMouth.set(0, 0, 0).addScaledVector(camR, 0.5).addScaledVector(camU, -0.72).addScaledVector(camF, -0.45).normalize();
+  dirMouth.set(0, 0, 0).addScaledVector(camR, 0.5).addScaledVector(camU, -0.8).addScaledVector(camF, 0.3).normalize();
   return out;
 }
 
@@ -101,7 +101,7 @@ function makeCheese(G) {
     }
   }
   geo.setIndex(idx);
-  const mat = new THREE.MeshPhysicalMaterial({ color: 0xf3d36a, roughness: 0.32, clearcoat: 0.4, emissive: 0x3a2400, sheen: 0.4, sheenColor: new THREE.Color(0xfff0b0) });
+  const mat = new THREE.MeshPhysicalMaterial({ color: 0xf8de80, roughness: 0.3, clearcoat: 0.5, emissive: 0x6a4a12, sheen: 0.4, sheenColor: new THREE.Color(0xfff0b0) });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.frustumCulled = false;
   mesh.visible = false;
@@ -129,7 +129,7 @@ function writeCheese(ch, rad) {
     cn.copy(camR).addScaledVector(ct, -camR.dot(ct)).normalize();
     cb.crossVectors(ct, cn);
     // thinner in the middle, a bit lumpy
-    const rr = rad * (0.45 + 0.55 * Math.pow(Math.abs(2 * s - 1), 1.5)) * (1 + 0.12 * Math.sin(s * 23));
+    const rr = rad * (0.3 + 0.7 * Math.pow(Math.abs(2 * s - 1), 1.5)) * (1 + 0.12 * Math.sin(s * 23));
     for (let k = 0; k <= CS; k++) {
       const a = (k / CS) * Math.PI * 2;
       const ca = Math.cos(a);
@@ -168,9 +168,9 @@ function updateCheese(G, dt) {
     const k = ch.t / C_STRETCH;
     const e = 1 - Math.pow(1 - k, 2);
     ch.B.copy(ch.A).addScaledVector(camU, -5.5 * e).addScaledVector(v3, 4.5 * e).addScaledVector(camR, -0.6 * e);
-    ch.C.lerpVectors(ch.A, ch.B, 0.5).addScaledVector(camU, -1.2 * e);
+    ch.C.lerpVectors(ch.A, ch.B, 0.5).addScaledVector(camU, -1.6 * e).addScaledVector(camR, 0.9 * e);
     ch.mesh.visible = true;
-    writeCheese(ch, 0.36 * (1 - 0.55 * k));
+    writeCheese(ch, 0.27 * (1 - 0.5 * k));
   } else if (ch.t < C_STRETCH + C_SNAP) {
     // snapped: the strand springs back into the ball
     const k = (ch.t - C_STRETCH) / C_SNAP;
@@ -366,7 +366,7 @@ export default {
         ballPos.y += Math.sin(Math.PI * e) * 3;
         b.group.position.copy(ballPos);
         dirCur.lerpVectors(dirPlat, dirMouth, e).normalize();
-        placePick(v1.copy(ballPos).addScaledVector(dirCur, -0.5), dirCur);
+        placePick(v1.copy(ballPos).addScaledVector(dirCur, -0.5 * (1 - e)).addScaledVector(camF, 1.05 * e).addScaledVector(camU, -1.05 * e), dirCur);
         S.steamT -= dt;
         if (S.steamT <= 0) {
           S.steamT = 0.09;
@@ -390,7 +390,7 @@ export default {
         mouthPoint(G, mouth);
         const w = Math.max(0, 1 - S.t / T_HOT);
         b.group.position.copy(mouth).addScaledVector(camR, Math.sin(S.t * 30) * 0.35 * w).addScaledVector(camU, Math.abs(Math.sin(S.t * 12)) * 0.6 * w);
-        placePick(v1.copy(b.group.position).addScaledVector(dirMouth, -0.5), dirMouth);
+        placePick(v1.copy(b.group.position).addScaledVector(camF, 1.05).addScaledVector(camU, -1.05), dirMouth);
         S.steamT -= dt;
         if (S.steamT <= 0) {
           S.steamT = 0.12;
@@ -406,7 +406,7 @@ export default {
         mouthPoint(G, mouth);
         // tiny breathing bob so it is clearly "being held"
         b.group.position.copy(mouth).addScaledVector(camU, Math.sin(S.t * 2.4) * 0.12);
-        placePick(v1.copy(b.group.position).addScaledVector(dirMouth, -0.5), dirMouth);
+        placePick(v1.copy(b.group.position).addScaledVector(camF, 1.05).addScaledVector(camU, -1.05), dirMouth);
         S.steamT -= dt;
         if (S.steamT <= 0) {
           S.steamT = 0.35 + Math.random() * 0.25;

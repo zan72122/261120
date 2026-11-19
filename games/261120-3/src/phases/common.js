@@ -293,14 +293,14 @@ canon.flaked = (G) => {
   for (const b of G.balls) {
     if (b.mode === 'gone') continue;
     b.mesh.getWorldPosition(_d.c);
-    for (let k = 0; k < 18; k++) {
+    for (let k = 0; k < 20; k++) {
       const a = r() * Math.PI * 2;
-      const th = Math.sqrt(r()) * (k < 7 ? 0.9 : 1.1);
+      const th = Math.sqrt(r()) * (k < 8 ? 0.9 : 1.1);
       _d.l.set(Math.cos(a) * Math.sin(th), Math.cos(th), Math.sin(a) * Math.sin(th));
       _v.copy(_d.l).multiplyScalar(R).add(_d.c);
       const tp = b.topPointAt(_v.x, _v.z, _d.q);
       if (tp) _v.y = tp.y;
-      G.bits.place(k < 7 ? "flake" : "aonori", _v, _d.l, b);
+      G.bits.place(k < 8 ? 'flake' : 'aonori', _v, _d.l, b);
     }
   }
 };

@@ -3,10 +3,10 @@
 import * as THREE from 'three';
 import { canon, dressBalls, dressHit, ballTopY, platterTopY, syncPlatter, keepWarm, clampToPlatter, serpentineOrder, nearestBall } from './common.js';
 
-const FLAKE_RATE = 20;
+const FLAKE_RATE = 24;
 const NORI_RATE = 30;
-const NEED = 4;
-const NEED_TOTAL = 64;
+const NEED = 5;
+const NEED_TOTAL = 80;
 const UP = new THREE.Vector3(0, 1, 0);
 
 const v1 = new THREE.Vector3();
@@ -212,7 +212,7 @@ export default {
       }
       S.sum = sum;
       // safety for clumsy pouring: after plenty of flakes, top up the balls still lacking
-      if (!allOk && S.emitted > 380) {
+      if ((!allOk || sum < NEED_TOTAL) && S.emitted > 380) {
         for (const b of balls) for (let k = S.flakes[b.index]; k < NEED; k++) placeOn(G, b, 'flake');
         allOk = true;
         sum = Math.max(sum, NEED_TOTAL);
