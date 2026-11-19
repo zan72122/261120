@@ -401,7 +401,7 @@ export function createTankWater(engine = {}) {
         const top = T.waterFull + 0.002 + (n2 - 0.5) * 0.008 + (n - 0.5) * 0.006;
         a *= sstep(top + 0.002, top - 0.002, y);
         if (spot > 0.7) a = Math.min(1, a + 0.25 * sstep(0.7, 0.8, spot));
-        a = clamp(a, 0, 1) * 0.84;
+        a = clamp(a, 0, 1) * 0.6;
         const i = py * AW + px;
         m0[i] = a; mm[i] = a; total0 += a;
         streak[i] = 0.72 + 0.28 * pfbm(fx * 60, fy * 6, 1000, 1000, 21, 2);
@@ -586,7 +586,8 @@ export function createTankWater(engine = {}) {
       const mc = murkBack.clone().lerp(murkFront, Math.pow(f, 0.8));
       u.uColA.value.copy(murkClear).lerp(mc, sstep(0, 0.35, m));
       u.uColB.value.copy(murkClear).lerp(mc.clone().multiplyScalar(1.12).lerp(new THREE.Color(0x9aa858), 0.25), sstep(0, 0.35, m));
-      u.uOpacity.value = alpha;
+      // 手前の層ほど薄く（奥は見えないが、前面ガラス寄りの魚・あみは形と色がうっすら分かる）
+      u.uOpacity.value = Math.min(0.95, alpha * mix(1.5, 0.42, f));
       u.uMurk.value = m;
     }
     surfMat.color.set(0xcfe6ee).lerp(new THREE.Color(0x6c8238), sstep(0.0, 0.6, m));

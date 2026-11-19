@@ -21,6 +21,8 @@
 //   fish.setVisible(bool)
 //   ※ 透明なひれは depthWrite=false。fish.update が毎フレーム world z から renderOrder を
 //     water.js の murkOrderForZ(z) で決める（にごりの層の間に差し込まれる。水槽外でも 19.5 前後で安全）。
+//   fish.finOrder  null | number。number を入れると ひれの renderOrder をその値に固定（水槽の水の外では 40 = にごり・水面・コケ(30)より後、
+//                  前面ガラス(45)・鉢(50+)より前）。null で murkOrderForZ（既定）。story が水の内外で毎フレーム切り替える。
 //   ※ 胴・目は不透明 MeshPhysicalMaterial。胴は castShadow=true。
 //
 // createSwimmer(fish, opts?) -> swimmer   泳ぎの挙動。fish.group は scene 直下（親が単位行列）にある前提で world 座標を書く。
@@ -641,6 +643,7 @@ export function createFish(kind = 'wakin') {
   const fish = {
     group, inner, kind, length: cfg.total, radius: cfg.radius, mouth,
     swim: 0.3, turn: 0,
+    finOrder: null, // number なら ひれの renderOrder をこれに固定（水槽の水の外: あみで運ぶ間・鉢の中は 40 など）。null で murkOrderForZ
     update(dt, t) {
       if (t === lastT) return;
       lastT = t;
@@ -761,7 +764,7 @@ export function createFish(kind = 'wakin') {
 
       // にごりの層との描画順
       group.getWorldPosition(worldP);
-      const ro = murkOrderForZ(worldP.z);
+      const ro = typeof fish.finOrder === 'number' ? fish.finOrder : murkOrderForZ(worldP.z);
       for (const f of fins) f.mesh.renderOrder = ro;
     },
     gulp() { gulpT = 0; },
