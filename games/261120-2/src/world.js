@@ -1352,7 +1352,7 @@ export function buildWorld(engine) {
   }
 
   // ================================================================ halo
-  const haloTex = radialTexture([[0, 'rgba(255,214,150,1)'], [0.25, 'rgba(255,190,110,0.55)'], [0.6, 'rgba(255,160,80,0.16)'], [1, 'rgba(255,150,70,0)']], 128);
+  const haloTex = radialTexture([[0, 'rgba(255,214,150,0.72)'], [0.25, 'rgba(255,190,110,0.5)'], [0.6, 'rgba(255,160,80,0.16)'], [1, 'rgba(255,150,70,0)']], 128);
   const haloMat = new THREE.SpriteMaterial({ map: haloTex, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: true, transparent: true, opacity: 0, toneMapped: false });
   const haloSprite = new THREE.Sprite(haloMat); haloSprite.renderOrder = 60; haloSprite.visible = false;
   root.add(haloSprite);
@@ -1368,7 +1368,7 @@ export function buildWorld(engine) {
     haloV += ((haloOn ? 1 : 0) - haloV) * Math.min(1, dt * 4);
     if (!haloOn && haloV < 0.003) { haloV = 0; haloSprite.visible = false; }
     const br = 0.5 + 0.5 * Math.sin(t * 2.4);
-    haloMat.opacity = haloV * (0.45 + 0.3 * br);
+    haloMat.opacity = haloV * (0.38 + 0.26 * br);
     haloSprite.scale.setScalar(haloR * 2 * (0.94 + 0.1 * br));
   });
 

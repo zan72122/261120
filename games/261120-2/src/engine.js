@@ -609,7 +609,7 @@ function makeHandTexture() {
 
 function createGhost(scene, camera, size) {
   let hand = null, sprite = null, mat = null;
-  const BASE_OPACITY = 0.45;
+  const BASE_OPACITY = 0.62;
   const state = {
     playing: false, stopping: false, points: null, curve: null,
     duration: 1.8, loop: true, tap: false, pause: 0.6, t: 0, fade: 0,
@@ -687,7 +687,7 @@ function createGhost(scene, camera, size) {
       // 距離に応じたスケール: 指先の幅 ≒ 50 CSS px
       const dist = Math.max(0.05, camera.position.distanceTo(pos));
       const worldPerPx = (2 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / Math.max(1, size.h);
-      const pxScale = 50 / hand.fingerW; // テクスチャ px → CSS px
+      const pxScale = 32 / hand.fingerW; // テクスチャ px → CSS px
       const pressScale = 1 - 0.08 * press;
       const sx = hand.W * pxScale * worldPerPx * pressScale;
       const sy = hand.H * pxScale * worldPerPx * pressScale;

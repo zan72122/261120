@@ -654,7 +654,8 @@ export function createStory({ engine, world, tw, fx, audio, fishes }) {
   }
   function pourTarget() {
     const r = { pos: _a.copy(PIS.pos).setY(PIS.pos.y + PI_GRAB).clone(), r: 0.07, hl: { pitcher: S.done ? 0 : 1 } };
-    if (PIS.mode === 'drag' && !S.done) r.dest = { pos: V(-0.02, RIM + 0.03, -0.03), r: 0.08 };
+    if (PIS.mode === 'drag' && !S.done && PIS.tilt < 0.3) r.dest = { pos: V(-0.02, RIM + 0.03, -0.03), r: 0.08 };
+    if (PIS.tilt >= 0.3) { r.r = 0; r.hl = { pitcher: 0 }; } // 注いでいる間は光を消す
     return r;
   }
   function pourGhost() {
@@ -811,7 +812,8 @@ export function createStory({ engine, world, tw, fx, audio, fishes }) {
   }
   function backTarget() {
     const r = { pos: bowlGrabPos(_a).clone(), r: 0.065, hl: { bowl: S.done || S.allOut ? 0 : 1 } };
-    if ((BWS.mode === 'drag') && !S.allOut) r.dest = { pos: V(BWS.pos.x, RIM + 0.03, T.maxZ - 0.005), r: 0.08 };
+    if ((BWS.mode === 'drag') && !S.allOut && BWS.tilt < 0.25) r.dest = { pos: V(BWS.pos.x, RIM + 0.03, T.maxZ - 0.005), r: 0.08 };
+    if (BWS.tilt >= 0.25) { r.r = 0; r.hl = { bowl: 0 }; } // 傾けて帰している間は光を消して金魚を見せる
     return r;
   }
   function backGhost() {
