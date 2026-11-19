@@ -11,11 +11,11 @@ const lin = (hex) => {
 
 // cook gradient (tuned on screenshots)
 export const GRAD = {
-  raw: '#eee3c0', // wet pale cream batter
+  raw: '#ead7a4', // wet pale cream batter
   set: '#f1d68e', // opaque pale yellow
-  light: '#e2ac57', // light golden
-  golden: '#bd7630', // golden brown
-  deep: '#7f4418', // rich brown
+  light: '#e2b670', // light golden
+  golden: '#c98e48', // golden brown
+  deep: '#93552a', // rich brown
 };
 
 const HEAD_V = /* glsl */ `
@@ -87,7 +87,9 @@ bw = bw * bw; bw = bw * bw;
 bw /= (bw.x + bw.y + bw.z);
 vec4 tx = uTriY > 0.5 ? texture2D(uDetail, tp.xz)
   : texture2D(uDetail, tp.yz) * bw.x + texture2D(uDetail, tp.xz) * bw.y + texture2D(uDetail, tp.xy) * bw.z;
-vec4 tx2 = texture2D(uDetail, tp.zx * 0.37 + 0.31);
+vec3 tq = tp * 0.37 + 0.31;
+vec4 tx2 = uTriY > 0.5 ? texture2D(uDetail, tq.zx)
+  : texture2D(uDetail, tq.zy) * bw.x + texture2D(uDetail, tq.zx) * bw.y + texture2D(uDetail, tq.yx) * bw.z;
 float cookRaw = vTako.x;
 float cooked = smoothstep(0.22, 0.6, cookRaw);
 float tc = cookRaw + (tx2.g - 0.5) * 0.22 * cooked + (tx.g - 0.5) * 0.1 * cooked - (tx.r - 0.55) * 0.18 * smoothstep(0.5, 0.9, cookRaw);
@@ -137,7 +139,7 @@ const NORMAL_F = /* glsl */ `
 #include <normal_fragment_maps>
 {
   float hb = tx.r + (tx2.r - 0.5) * 0.6;
-  float bs = mix(0.6, 3.2, cooked) * (1.0 - 0.6 * takoSauce);
+  float bs = mix(0.5, 1.5, cooked) * (1.0 - 0.6 * takoSauce);
   vec2 dH = vec2(dFdx(hb), dFdy(hb)) * bs;
   if (takoCutFace) {
     normal = -uCutPlane.xyz;

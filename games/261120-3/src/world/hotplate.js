@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { lathe, arc, roundRectPath, offsetContour, sweep, cap, surface, smooth } from './geom.js';
+import { lathe, arc, roundRectPath, offsetContour, sweep, cap } from './geom.js';
 import { coatedMetal, smudge } from './textures.js';
 
 export function buildHotplate(ctx) {
@@ -89,7 +89,7 @@ export function buildHotplate(ctx) {
 
   // ---------- housing (matte black heat-resistant plastic) ----------
   const hsm = smudge(256, 0.55, 0.75, 12);
-  const housingMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1b, roughness: 1, roughnessMap: hsm, metalness: 0, envMapIntensity: 0.8 });
+  const housingMat = new THREE.MeshStandardMaterial({ color: 0x141415, roughness: 1, roughnessMap: hsm, metalness: 0, envMapIntensity: 0.9 });
   const bW = pW, bD = H.d - 6.4; // inner reference rect; outer = +3.2 each side
   const hpath = roundRectPath(bW, bD, 1.8, 10);
   const top = H.bodyH;
@@ -155,7 +155,7 @@ export function buildHotplate(ctx) {
   const lensGeo = new THREE.SphereGeometry(0.4, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2);
   lensGeo.rotateX(Math.PI / 2);
   lensGeo.scale(1, 1, 0.5);
-  const lampMat = new THREE.MeshPhysicalMaterial({ color: 0x5a2a08, emissive: 0xff7a1a, emissiveIntensity: 0, roughness: 0.15, clearcoat: 1 });
+  const lampMat = new THREE.MeshPhysicalMaterial({ color: 0x5a2a08, emissive: 0xff5208, emissiveIntensity: 0, roughness: 0.15, clearcoat: 1 });
   const lens = new THREE.Mesh(lensGeo, lampMat);
   lens.position.set(-5.4, dialY, frontZ);
   group.add(lens);

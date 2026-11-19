@@ -180,7 +180,7 @@ export function buildPlaceSettings(ctx) {
 // Small procedural room used only to bake the environment map (soft lamp + walls + window + warm table below)
 export function bakeEnvironment(renderer) {
   const s = new THREE.Scene();
-  const box = new THREE.Mesh(new THREE.BoxGeometry(12, 6, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.06, 0.045, 0.035), side: THREE.BackSide }));
+  const box = new THREE.Mesh(new THREE.BoxGeometry(12, 6, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.1, 0.075, 0.055), side: THREE.BackSide }));
   box.position.y = 1.5;
   s.add(box);
   const add = (geo, rgb, x, y, z, rx = 0, ry = 0) => {

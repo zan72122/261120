@@ -69,38 +69,39 @@ export function tableWood(size, aniso) {
   const planks = 6; // across v
   const R = rng(7);
   const pk = [];
-  for (let p = 0; p < planks; p++) pk.push({ tint: R() * 0.16 - 0.08, hue: R() * 0.06 - 0.03, ring: 5 + R() * 6, off: R() * 10, seed: p * 31 + 3, smudge: R() });
-  // two-tone walnut/oak colour (sRGB 0..1)
-  const light = [0.56, 0.37, 0.22], dark = [0.32, 0.19, 0.105];
+  for (let p = 0; p < planks; p++) pk.push({ tint: R() * 0.12 - 0.06, hue: R() * 0.03 - 0.015, ring: 3 + R() * 4, off: R() * 10, seed: p * 31 + 3 });
+  // walnut-ish oak, fairly neutral (sRGB 0..1)
+  const light = [0.52, 0.37, 0.24], dark = [0.31, 0.2, 0.115];
   for (let y = 0; y < size; y++) {
     const v = y / size;
     const pv = v * planks;
     const pi = Math.floor(pv), lv = pv - pi;
     const P = pk[pi];
-    const edge = Math.min(lv, 1 - lv) * (140 / planks); // in ~cm-ish units across plank
-    const seam = Math.max(0, 1 - edge / 0.12); // dark seam line
-    const bevel = Math.max(0, 1 - edge / 0.5);
+    const edge = Math.min(lv, 1 - lv) * (90 / planks); // cm across plank to the seam
+    const seam = Math.max(0, 1 - edge / 0.09);
+    const bevel = Math.max(0, 1 - edge / 0.35);
     for (let x = 0; x < size; x++) {
       const u = x / size;
-      const warp = fbm(u, v, 3, 6, 3, P.seed) - 0.5;
-      const rings = (lv * P.ring + warp * 2.2 + P.off) % 1;
-      const late = Math.pow(Math.abs(Math.sin(rings * Math.PI)), 6); // latewood bands
-      const streak = vnoise(u * 24, v * 220, 24, 220, P.seed + 5);
-      const fine = vnoise(u * 64, v * 700, 64, 700, P.seed + 9);
-      const poreN = vnoise(u * 180, v * 1300, 180, 1300, P.seed + 11);
-      const pore = poreN > 0.78 ? (poreN - 0.78) / 0.22 : 0;
-      const smudge = fbm(u, v, 4, 4, 2, 99) ;
-      let t = 0.45 + late * 0.35 + (streak - 0.5) * 0.35 + (fine - 0.5) * 0.18 + P.tint * 2;
+      const warp = fbm(u, v, 2, 5, 3, P.seed) - 0.5;
+      const rings = (((lv * P.ring + warp * 1.4 + P.off) % 1) + 1) % 1;
+      const late = Math.pow(Math.abs(Math.sin(rings * Math.PI)), 14); // narrow latewood lines
+      const wide = Math.pow(Math.abs(Math.sin(rings * Math.PI)), 3);
+      const streak = vnoise(u * 10, v * 150, 10, 150, P.seed + 5);
+      const fine = vnoise(u * 40, v * 600, 40, 600, P.seed + 9);
+      const poreN = vnoise(u * 70, v * 1100, 70, 1100, P.seed + 11);
+      const pore = poreN > 0.8 ? (poreN - 0.8) / 0.2 : 0;
+      const smudge = fbm(u, v, 4, 4, 2, 99);
+      let t = 0.4 + wide * 0.12 + late * 0.22 + (streak - 0.5) * 0.32 + (fine - 0.5) * 0.12 + P.tint * 2;
       t = Math.min(1, Math.max(0, t));
       const k = (y * size + x) * 4;
       let r = light[0] + (dark[0] - light[0]) * t, g = light[1] + (dark[1] - light[1]) * t, b = light[2] + (dark[2] - light[2]) * t;
       r += P.hue; b -= P.hue * 0.5;
-      const pd = 1 - pore * 0.45 - seam * 0.7;
+      const pd = 1 - pore * 0.22 - seam * 0.65;
       col[k] = clamp255(r * pd * 255); col[k + 1] = clamp255(g * pd * 255); col[k + 2] = clamp255(b * pd * 255); col[k + 3] = 255;
-      // satin finish: base 0.42, pores/seams rougher, faint smudges glossier/rougher
-      const rr = 0.4 + pore * 0.25 + seam * 0.3 + (smudge - 0.5) * 0.22 + late * 0.05;
+      // satin finish: pores/seams rougher, faint smudges
+      const rr = 0.42 + pore * 0.15 + seam * 0.3 + (smudge - 0.5) * 0.2 + late * 0.04;
       rough[k] = rough[k + 1] = rough[k + 2] = clamp255(rr * 255); rough[k + 3] = 255;
-      const hh = 0.6 - pore * 0.35 - bevel * bevel * 0.6 + (fine - 0.5) * 0.08 + late * 0.04;
+      const hh = 0.6 - pore * 0.2 - bevel * bevel * 0.6 + (fine - 0.5) * 0.06 + late * 0.05;
       bump[k] = bump[k + 1] = bump[k + 2] = clamp255(hh * 255); bump[k + 3] = 255;
     }
   }
@@ -141,10 +142,10 @@ export function coatedMetal(size) {
       h[y * size + x] = s1 * 0.6 + s2 * 0.4;
       const k = (y * size + x) * 4;
       // oil sheen: glossier blotches
-      const r = 0.42 + (s1 - 0.5) * 0.12 - Math.max(0, blot - 0.52) * 0.9;
+      const r = 0.4 + (s1 - 0.5) * 0.1 - Math.max(0, blot - 0.55) * 0.35;
       rough[k] = rough[k + 1] = rough[k + 2] = clamp255(r * 255); rough[k + 3] = 255;
     }
-  return { normalMap: tex(heightToNormal(h, size, 1.6), size), roughnessMap: tex(rough, size) };
+  return { normalMap: tex(heightToNormal(h, size, 1.0), size), roughnessMap: tex(rough, size) };
 }
 
 // ---------- speckled stoneware glaze ----------
@@ -179,7 +180,7 @@ export function flakeTex(size) {
   for (let y = 0; y < size; y++)
     for (let x = 0; x < size; x++) {
       const u = x / size, v = y / size;
-      const streak = vnoise(u * 3, v * 40, 3, 40, 41);
+      const streak = vnoise(u * 3, v * 40, 3, 40, 41) * 0.6;
       const fine = vnoise(u * 8, v * 120, 8, 120, 42);
       // ragged elliptical outline
       const dx = (u - 0.5) * 2, dy = (v - 0.5) * 2;
@@ -191,9 +192,9 @@ export function flakeTex(size) {
       const edge = Math.max(0, d / rag - 0.7) / 0.3;
       const k = (y * size + x) * 4;
       // pink-tan with darker streaks, paler (thinner) at edges
-      col[k] = clamp255((0.80 - t * 0.22 + edge * 0.08) * 255);
-      col[k + 1] = clamp255((0.56 - t * 0.2 + edge * 0.1) * 255);
-      col[k + 2] = clamp255((0.43 - t * 0.17 + edge * 0.1) * 255);
+      col[k] = clamp255((0.88 - t * 0.14 + edge * 0.06) * 255);
+      col[k + 1] = clamp255((0.68 - t * 0.14 + edge * 0.1) * 255);
+      col[k + 2] = clamp255((0.56 - t * 0.12 + edge * 0.1) * 255);
       col[k + 3] = a;
     }
   const t = tex(col, size, { srgb: true });

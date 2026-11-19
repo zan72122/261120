@@ -20,8 +20,7 @@ export function getDetailTexture() {
       const u = x / S, v = y / S;
       let hh = 0.4 * pnoise2(u * 8, v * 8, 8, 1) + 0.3 * pnoise2(u * 24, v * 24, 24, 2) + 0.2 * pnoise2(u * 64, v * 64, 64, 3) + 0.1 * pnoise2(u * 128, v * 128, 128, 4);
       // crusty "crinkle": ridged high-frequency term
-      const r = 1 - Math.abs(pnoise2(u * 40, v * 40, 40, 5) * 2 - 1);
-      hh = hh * 0.75 + r * r * 0.25;
+
       h[y * S + x] = hh;
       g[y * S + x] = 0.6 * pnoise2(u * 3, v * 3, 3, 7) + 0.4 * pnoise2(u * 7, v * 7, 7, 8);
     }
@@ -29,8 +28,8 @@ export function getDetailTexture() {
   const rnd = mulberry(1234);
   const wrapD = (d) => (d > S / 2 ? d - S : d < -S / 2 ? d + S : d);
   // pores / tiny bubbles
-  for (let k = 0; k < 260; k++) {
-    const cx = rnd() * S, cy = rnd() * S, rr = 1.2 + rnd() * rnd() * 4.5, dep = 0.25 + rnd() * 0.35;
+  for (let k = 0; k < 420; k++) {
+    const cx = rnd() * S, cy = rnd() * S, rr = 1.5 + rnd() * rnd() * 7, dep = 0.2 + rnd() * 0.4;
     const R = Math.ceil(rr + 1);
     for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
       const px = ((Math.floor(cx) + dx) % S + S) % S, py = ((Math.floor(cy) + dy) % S + S) % S;
