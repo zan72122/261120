@@ -81,7 +81,7 @@ function addCutFace(mat, interiorHex, u) {
 
 let variantCounter = 0;
 
-export function makeFilling(kind = 'octopus') {
+export function makeFilling(kind = 'octopus', opts = {}) {
   const group = new THREE.Group();
   const u = {
     uCut: { value: 0 },
@@ -124,7 +124,7 @@ export function makeFilling(kind = 'octopus') {
     m.rotation.x = 0.35;
     group.add(m);
   } else {
-    const variant = variantCounter++ % 3;
+    const variant = opts.variant != null ? opts.variant : variantCounter++ % 3;
     const { g, suckers } = octopusGeometry(variant);
     const m = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.32, clearcoat: 0.4, clearcoatRoughness: 0.25 });
     addCutFace(m, '#f4ece2', u);

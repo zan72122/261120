@@ -2,6 +2,7 @@
 // Flakes (katsuobushi) are bent in the vertex shader so landed ones "dance" in the heat without CPU cost.
 import * as THREE from 'three';
 import { RIM_Y, HOTPLATE, PLATTER } from '../config.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { getFlakeTexture } from './textures.js';
 import { mulberry } from './noise.js';
 
@@ -59,7 +60,11 @@ function aonoriGeo() {
   return g;
 }
 function mayoGeo() {
-  const g = new THREE.SphereGeometry(0.25, 16, 10);
+  // Only the upper 6 of the original 10 rings are kept: the lower ones were all flattened onto
+  // y = -0.05 by the squash below, so a flat cap built from the last ring gives the same shape
+  // with ~1/3 fewer triangles (520 instances, also drawn into the shadow map).
+  const W = 16, H = 6;
+  const g = new THREE.SphereGeometry(0.25, W, H, 0, Math.PI * 2, 0, Math.PI * (H / 10));
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
@@ -68,7 +73,22 @@ function mayoGeo() {
     p.setXYZ(i, x * k * 1.05, Math.max(-0.05, y * 0.62), z * k);
   }
   g.computeVertexNormals();
-  return g;
+  // bottom cap: fan over the last ring, facing down
+  const ring = H * (W + 1);
+  const cp = [], cn = [], cu = [], ci = [];
+  for (let s = 0; s <= W; s++) {
+    cp.push(p.getX(ring + s), p.getY(ring + s), p.getZ(ring + s));
+    cn.push(0, -1, 0);
+    cu.push(s / W, 1);
+  }
+  cp.push(0, -0.05, 0); cn.push(0, -1, 0); cu.push(0.5, 1);
+  for (let s = 0; s < W; s++) ci.push(s + 1, s, W + 1);
+  const capG = new THREE.BufferGeometry();
+  capG.setAttribute('position', new THREE.Float32BufferAttribute(cp, 3));
+  capG.setAttribute('normal', new THREE.Float32BufferAttribute(cn, 3));
+  capG.setAttribute('uv', new THREE.Float32BufferAttribute(cu, 2));
+  capG.setIndex(ci);
+  return mergeGeometries([g, capG], false);
 }
 function flakeGeo() {
   const g = new THREE.PlaneGeometry(1, 1, 8, 3);

@@ -28,8 +28,8 @@ export function buildHotplate(ctx) {
   const f = 0.32; // rim fillet radius
   const R = HOLE_R;
   const cR = Math.sqrt((R + f) * (R + f) - f * f); // where the fillet meets the flat top
-  const HS = low ? 48 : 64; // radial segments per hole
-  const sphereSegs = low ? 14 : 20;
+  const HS = low ? 36 : 40; // radial segments per hole (sub-pixel facets even on iPad; normals are analytic)
+  const sphereSegs = low ? 12 : 14;
   // profile walks from the flat top down into the hole (normals face up / toward the axis)
   const prof = [];
   const a0 = Math.atan2(f, -cR); // fillet: from top (90deg) to contact angle

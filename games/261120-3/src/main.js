@@ -12,6 +12,7 @@ import { createHints } from './core/hints.js';
 import { createFx } from './core/fx.js';
 import { createSave, freshState } from './core/save.js';
 import { createFlow } from './core/flow.js';
+import { budgetScale, createShadowGate, warmUp } from './core/perf.js';
 
 const canvas = document.getElementById('stage');
 let stopped = false;
@@ -142,7 +143,9 @@ function boot() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const bigScreen = Math.max(screen.width || 0, screen.height || 0) * dpr >= 2000;
   const weak = (navigator.hardwareConcurrency || 8) <= 4 && bigScreen;
-  const quality = { low: false, dpr, particleScale: 1, scale: weak ? Math.max(0.6, dpr * 0.75) : dpr };
+  // maxScale: the pixel-ratio ceiling for the current canvas size (pixel budget, see core/perf.js)
+  const maxScale0 = budgetScale(window.innerWidth || 1, window.innerHeight || 1, dpr);
+  const quality = { low: false, dpr, particleScale: 1, maxScale: maxScale0, scale: weak ? Math.max(0.6, Math.min(maxScale0, dpr * 0.75)) : maxScale0 };
 
   const layoutListeners = [];
   const G = {
@@ -194,6 +197,7 @@ function boot() {
     quality.low = true;
     quality.particleScale = 0.5;
     renderer.shadowMap.enabled = false;
+    renderer.shadowMap.autoUpdate = true;
     scene.traverse((o) => {
       if (o.isLight) o.castShadow = false;
       const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
@@ -209,7 +213,13 @@ function boot() {
     const w = Math.max(1, window.innerWidth || canvas.clientWidth || 1);
     const h = Math.max(1, window.innerHeight || canvas.clientHeight || 1);
     const changed = w !== cssW || h !== cssH;
-    renderer.setPixelRatio(quality.scale);
+    if (changed) {
+      const ms = budgetScale(w, h, dpr);
+      // keep the adaptive drop ratio when the ceiling moves (e.g. iPad split view)
+      quality.scale = Math.max(0.6, Math.min(ms, quality.scale * (ms / quality.maxScale)));
+      quality.maxScale = ms;
+    }
+    if (Math.abs(renderer.getPixelRatio() - quality.scale) > 1e-3) renderer.setPixelRatio(quality.scale);
     if (!changed && !force) return;
     const portraitBefore = G.layout && G.layout.portrait;
     cssW = w;
@@ -262,6 +272,15 @@ function boot() {
   G.flow.start(startIndex);
   if (!G.cam.box && G.layout.frames) G.cam.frame(G.layout.frames.cook, { dur: 0 });
 
+  // ---------- shader warm-up + shadow-map gating ----------
+  try {
+    warmUp(renderer, scene, camera);
+  } catch (e) {
+    console.warn('[main] warm-up failed:', e);
+  }
+  const shadowGate = createShadowGate(renderer, scene);
+  scene.matrixWorldAutoUpdate = false; // shadowGate.update() runs the single world-matrix pass per frame
+
   // ---------- main loop ----------
   const warned = new Set();
   const step = (tag, fn) => {
@@ -280,36 +299,68 @@ function boot() {
   let smoothMs = 16.7;
   let slowT = 0;
   let fastT = 0;
+  let vsyncMs = 16.7; // estimated refresh interval (60 Hz, 120 Hz ProMotion, 30 Hz Low Power Mode, ...)
+  let failScale = Infinity; // a scale that recently proved too slow: don't climb back to it too soon
+  let failT = 0;
+  let trial = null; // a pending downscale whose benefit is being checked
+  let graceT = 1.2; // ignore start-up / resume hitches
   const MIN_SCALE = 0.6;
 
+  // Dynamic resolution: aim for (near) the display refresh, not just "above 28 fps".
+  // A downscale that does not speed frames up means the display / OS caps the rate
+  // (e.g. Low Power Mode at 30 Hz): it is undone and that rate is taken as the refresh.
+  function setScale(ns) {
+    quality.scale = ns;
+    renderer.setPixelRatio(ns);
+  }
   function adapt(realMs, dt) {
-    smoothMs += (Math.min(realMs, 120) - smoothMs) * 0.06;
-    if (smoothMs > 36) {
+    if (graceT > 0) {
+      graceT -= dt;
+      return;
+    }
+    const ms = Math.min(realMs, 120);
+    smoothMs += (ms - smoothMs) * 0.06;
+    vsyncMs = Math.min(vsyncMs + dt * 0.1, Math.max(6.5, smoothMs));
+    failT += dt;
+    if (trial) {
+      trial.t += dt;
+      if (trial.t < 1.5) return;
+      if (smoothMs > trial.ms * 0.92) {
+        setScale(trial.from); // no gain: not GPU-bound
+        vsyncMs = Math.max(vsyncMs, smoothMs);
+        failScale = Infinity;
+      }
+      trial = null;
+      slowT = fastT = 0;
+      return;
+    }
+    const slowMs = Math.max(vsyncMs * 1.4, 21.5);
+    const fastMs = Math.max(vsyncMs * 1.12, 17.8);
+    if (smoothMs > slowMs) {
       slowT += dt;
       fastT = 0;
-    } else if (smoothMs < 22) {
+    } else if (smoothMs < fastMs) {
       fastT += dt;
       slowT = 0;
     } else {
       slowT = 0;
       fastT = 0;
     }
-    if (slowT > 1.5) {
+    if (slowT > 1.0) {
       slowT = 0;
       const ns = Math.max(MIN_SCALE, quality.scale * 0.85);
       if (ns < quality.scale - 1e-3) {
-        quality.scale = ns;
-        renderer.setPixelRatio(ns);
-        smoothMs = 28; // give the new scale a chance
-      } else goLow();
+        trial = { from: quality.scale, ms: smoothMs, t: 0 };
+        failScale = quality.scale;
+        failT = 0;
+        setScale(ns);
+      } else if (smoothMs > 30 && vsyncMs < 25) goLow(); // still < ~33 fps at the minimum scale
     }
-    if (fastT > 4) {
+    if (fastT > 3) {
       fastT = 0;
-      const ns = Math.min(dpr, quality.scale / 0.85);
-      if (ns > quality.scale + 1e-3) {
-        quality.scale = ns;
-        renderer.setPixelRatio(ns);
-      }
+      const ns = Math.min(quality.maxScale, quality.scale / 0.85);
+      const blocked = ns >= failScale - 1e-3 && failT < 20;
+      if (ns > quality.scale + 1e-3 && !blocked) setScale(ns);
     }
   }
 
@@ -335,12 +386,14 @@ function boot() {
     step('world', () => G.world && G.world.update && G.world.update(dt));
     step('fx', () => G.fx.update(dt));
     step('cam', () => G.cam.update(dt));
+    step('shadow', () => shadowGate.update());
     step('render', () => renderer.render(scene, camera));
   }
 
   function resume() {
     if (stopped || raf || document.hidden) return;
     last = -1; // no dt spike
+    graceT = Math.max(graceT, 0.6);
     raf = requestAnimationFrame(frame);
   }
   function pause() {
@@ -379,6 +432,7 @@ function boot() {
     clearTimeout(lostTimer);
     if (stopped) return;
     applySize(true);
+    shadowGate.invalidate();
     resume();
   }, false);
 
